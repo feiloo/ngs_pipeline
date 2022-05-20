@@ -1,0 +1,7 @@
+folder_remap/test/remap_input/test.vcf filter=lfs diff=lfs merge=lfs -text
+folder_remap/test/remap_input/Variants[[:space:]]passing[[:space:]]filters-E5028-DNA_1[[:space:]](paired).vcf filter=lfs diff=lfs merge=lfs -text
+folder_remap/test/remap_input/crossmapped_to_hg19_E5028-DNA.vcf filter=lfs diff=lfs merge=lfs -text
+folder_remap/test/remap_data/Homo_sapiens.GRCh37.dna.primary_assembly.fa.fai filter=lfs diff=lfs merge=lfs -text
+folder_remap/test/remap_data/GRCh38_to_GRCh37.chain filter=lfs diff=lfs merge=lfs -text
+folder_remap/test/remap_data/hg38ToHg19.over.chain filter=lfs diff=lfs merge=lfs -text
+folder_remap/test/remap_data/Homo_sapiens.GRCh37.dna.primary_assembly.fa filter=lfs diff=lfs merge=lfs -text

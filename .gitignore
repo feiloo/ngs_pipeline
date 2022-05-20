@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# additional ignores
+*.log
+test/remap_output
+test/remap_reject
+test/remap_unmap
+*.unmap

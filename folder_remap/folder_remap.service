@@ -1,0 +1,11 @@
+[Unit]
+Description=Remap vcf in a folder to hg19 with CrossMap every 5 minutes
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/folder_remap.sh 2>&1
+Restart=on-failure
+RestartSec=120
+
+[Install]
+WantedBy=default.target

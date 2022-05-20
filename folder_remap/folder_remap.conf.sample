@@ -1,0 +1,15 @@
+#@/bin/bash
+
+input_folder="/PAT-Sequenzer/CrossMap/remap_input"
+output_folder="/PAT-Sequenzer/CrossMap/remap_output"
+unmap_folder="/PAT-Sequenzer/CrossMap/remap_unmap"
+reject_folder="/PAT-Sequenzer/CrossMap/remap_reject"
+input_chain_file="/PAT-Sequenzer/CrossMap/remap_data/hg38ToHg19.over.chain"
+# chromosome sequences of target assembly in fasta format
+refgenome_file="/PAT-Sequenzer/CrossMap/remap_data/Homo_sapiens.GRCh37.dna.primary_assembly.fa"
+log_file="/PAT-Sequenzer/CrossMap/remap.log"
+max_failed_maps=-1
+
+run_crossmap=true
+# not supported yet
+#run_ncbi=true
