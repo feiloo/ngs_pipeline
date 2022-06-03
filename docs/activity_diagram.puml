@@ -1,0 +1,20 @@
+@startuml
+(*) --> "Choose Diagnostic Panel"
+--> "Provide Biopsy"
+--> "Prepare Biopsy and Library"
+--> "Targeted Sequencing"
+--> "CLC Workbench workflow"
+
+--> ===B1===
+--> "liftover remap zu hg19"
+--> "MH Guide"
+--> ===B2===
+
+===B1=== --> "cnv analysis"
+--> ===B2===
+
+--> "sort and analyse excel files" 
+--> "verify quality"
+--> "provide diagnosis back to the client"
+--> (*)
+@enduml

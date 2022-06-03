@@ -36,7 +36,8 @@ remaps with more than max_failed_maps fails will be rejected.
 disable the check with max_failed_maps=-1
 
 Interpretation of Failed tags [from here](https://crossmap.readthedocs.io/en/latest/#view-chain-file):
-    Fail(Multiple_hits) : This genomic location was mapped to two or more locations to the target assembly.
-    Fail(REF==ALT) : After liftover, the reference allele is the same as the alternative allele (i.e. this is NOT an SNP/variant after liftover). In version 0.5.2, this checking can be turned off by setting no-comp-alleles.
-    Fail(Unmap) : Unable to map this location to the target assembly.
-    Fail(KeyError) : Unable to find the contig ID (or chromosome ID) from the reference genome sequence (of the target assembly).
+
+*    Fail(Multiple_hits) : This genomic location was mapped to two or more locations to the target assembly.
+*    Fail(REF==ALT) : After liftover, the reference allele is the same as the alternative allele (i.e. this is NOT an SNP/variant after liftover). In version 0.5.2, this checking can be turned off by setting no-comp-alleles.
+*    Fail(Unmap) : Unable to map this location to the target assembly.
+*    Fail(KeyError) : Unable to find the contig ID (or chromosome ID) from the reference genome sequence (of the target assembly).
