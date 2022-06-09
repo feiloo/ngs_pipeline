@@ -17,11 +17,6 @@ while getopts 'c:' OPTION; do
 done
 shift "$(($OPTIND -1))"
 
-# use different config path if first argument is specified (not null)
-#if [ ! -z "$1" ];then
-    #confpath="$1"
-#fi
-
 if [ ! -f "$confpath" ]; then
 	echo "$confpath config for folder_remap not found"
 	exit 1
@@ -69,5 +64,3 @@ do
 		fi
 	fi
 done
-
-#inotifywait -e moved_to -e modify hg38 --format %f;

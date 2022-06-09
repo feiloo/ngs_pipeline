@@ -3,31 +3,36 @@ This script/systemd-service automatically remaps hg38 to gh19 vcf files with Cro
 
 It remaps all files from the input folder to the output folder every 5 minutes.
 The output is prefixed with the tool and format:
+
 `sequence.vcf -> crossmaped_to_hg19_sequence.vcf`
 
-### Setup
+## Setup
 
-Install with sudo ./install.sh
-Copy and Edit /etc/folder_remap.conf.sample to /etc/folder_remap.conf
+Install with `sudo ./install.sh`.
+Copy `/etc/folder_remap.conf.sample` to `/etc/folder_remap.conf` and configure it.
 
 You might need to download the chain file and refgenome in the fasta file format and put it into the specified path.
-Read the documentation of [CrossMap.py](https://crossmap.readthedocs.io/en/latest/) for details on usage.
+Read the documentation of [CrossMap.py](https://crossmap.readthedocs.io/en/latest/) for detailed usage.
 
-# Testing
+## Testing
 Run a basic Test:
-`./test.sh`
+```
+./test.sh
+```
 
 ## Additionally
-CrossMap's Remapping/Liftover is lossy, use the log file for monitoring the or extend folder_remap.sh to reject remaps.
-For a comprehensive benchmark read [Benchmark study comparing liftover tools for genome conversion of epigenome sequencing data](https://academic.oup.com/nargab/article/2/3/lqaa054/5881791?login=true).
-
-see the generated log file or:
+CrossMap's Remapping/Liftover is lossy. You can set a maximum number of failed mappings. If this limit is surpassed the sample will be rejected.
+For a comprehensive benchmark of liftover tools read [Benchmark study comparing liftover tools for genome conversion of epigenome sequencing data](https://academic.oup.com/nargab/article/2/3/lqaa054/5881791?login=true).
 
 show the system log for the service:
+```
 sudo journalctl -r -u folder_rempa.service
+```
 
 show the current status journal for info:
-`sudo systemctl status folder_remap.service`
+```
+sudo systemctl status folder_remap.service`
+```
 
 the ncbi remap api option is not yet supported.
 the unmap outputs specify the remapping errors.
