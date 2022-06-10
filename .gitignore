@@ -131,8 +131,10 @@ dmypy.json
 
 # additional ignores
 *.log
-test/remap_output
-test/remap_reject
-test/remap_unmap
+folder_remap/test/remap_input
+folder_remap/test/remap_output
+folder_remap/test/remap_reject
+folder_remap/test/remap_unmap
+folder_remap/test/remap_data
 *.unmap
 docs/output
