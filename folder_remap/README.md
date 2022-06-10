@@ -1,5 +1,5 @@
 # Folder Remap
-This script/systemd-service automatically remaps hg38 to gh19 vcf files with CrossMap.py.
+This script and systemd-service automatically remaps hg38 to gh19 vcf files with CrossMap.py.
 
 It remaps all files from the input folder to the output folder every 5 minutes.
 The output is prefixed with the tool and format:
@@ -9,7 +9,7 @@ The output is prefixed with the tool and format:
 ## Setup
 
 Install with `sudo ./install.sh`.
-Copy `/etc/folder_remap.conf.sample` to `/etc/folder_remap.conf` and configure it.
+Copy `/usr/local/etc/folder_remap.conf.sample` to `/usr/local/etc/folder_remap.conf` and configure it.
 
 You might need to download the chain file and refgenome in the fasta file format and put it into the specified path.
 Read the documentation of [CrossMap.py](https://crossmap.readthedocs.io/en/latest/) for detailed usage.
@@ -26,7 +26,7 @@ For a comprehensive benchmark of liftover tools read [Benchmark study comparing 
 
 show the system log for the service:
 ```
-sudo journalctl -r -u folder_rempa.service
+sudo journalctl -r -u folder_remap.service
 ```
 
 show the current status journal for info:
@@ -37,8 +37,7 @@ sudo systemctl status folder_remap.service`
 the ncbi remap api option is not yet supported.
 the unmap outputs specify the remapping errors.
 
-remaps with more than max_failed_maps fails will be rejected.
-disable the check with max_failed_maps=-1
+The remaps with more than max_failed_maps fails will be rejected or disable the check with max_failed_maps=-1 in the config.
 
 Interpretation of Failed tags [from here](https://crossmap.readthedocs.io/en/latest/#view-chain-file):
 

@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # default config path
-confpath="/etc/folder_remap.conf"
+confpath="/usr/local/etc/folder_remap.conf"
 
-# parse flags for config
+#parse flags for config
 while getopts 'c:' OPTION; do
     case "$OPTION" in
         c)
