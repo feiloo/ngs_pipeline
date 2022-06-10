@@ -1,6 +1,7 @@
 #@/bin/bash
 
 input_folder="/PAT-Sequenzer/CrossMap/remap_input"
+archive_folder="/PAT-Sequenzer/CrossMap/remap_archive"
 output_folder="/PAT-Sequenzer/CrossMap/remap_output"
 unmap_folder="/PAT-Sequenzer/CrossMap/remap_unmap"
 reject_folder="/PAT-Sequenzer/CrossMap/remap_reject"

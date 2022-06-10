@@ -2,24 +2,33 @@
 
 rm -r test/remap.log
 rm -r test/remap_output/*
+rm -r test/remap_archive/*
+rm -r test/remap_input/*
+
+cp test/testdata/* test/remap_input/
 
 ./folder_remap.sh -c test/folder_remap.conf
 
 # test that all output files are generated
 # assuming that max_rejects is deactivated
-for filepath in "test/remap_input/"*".vcf";
+for filepath in "test/remap_archive/"*".vcf";
 do
     filename=$(basename "$filepath")
-    echo "$filename"
-    if [ ! -f "test/remap_output/crossmapped_to_hg19_$filename" ]; then
-        echo "test failed: "test/remap_output/crossmapped_to_hg19_$filename" wasnt generated"
+    if [ ! -f "test/remap_output/$filename" ]; then
+        echo "test failed: "test/remap_output/$filename" wasnt generated"
         exit 1
     fi
 done
 
 num_remappings=$(grep "remapping" "test/remap.log" | wc -l)
 
-./folder_remap.sh test/folder_remap.conf
+rm -r test/remap.log
+rm -r test/remap_output/*
+rm -r test/remap_archive/*
+rm -r test/remap_input/*
+
+cp test/testdata/* test/remap_input/
+./folder_remap.sh -c test/folder_remap.conf
 
 num_remappings_after=$(grep "remapping" "test/remap.log" | wc -l)
 

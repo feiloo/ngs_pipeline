@@ -29,14 +29,25 @@ if [ "$run_ncbi" != true ] && [ "$run_crossmap" != true ]; then
 	exit 1
 fi
 
-echo "using config" "$confpath"
+# echo "using config" "$confpath"
 
 mkdir -vp "$input_folder"
+mkdir -vp "$archive_folder"
 mkdir -vp "$output_folder"
 mkdir -vp "$reject_folder"
 mkdir -vp "$unmap_folder"
 mkdir -vp $(dirname "$input_chain_file")
 mkdir -vp $(dirname "$refgenome_file")
+
+folders=("$input_folder" "$archive_folder" "$output_folder" "$reject_folder" "$unmap_folder")
+
+for d in "${folders[@]}"; do
+  echo "$d"
+  if [ ! -d "$d" ]; then
+    echo "configuration specifies invalid folder: \"$d\""
+    exit 1
+  fi
+done
 
 for filepath in "$input_folder/"*".vcf";
 do
@@ -44,6 +55,7 @@ do
 	ncbi_destpath="$output_folder/ncbi_hg19_$filename"
 	crossmap_destpath="$output_folder/crossmapped_to_hg19_$filename"
 	unmap_destpath="$unmap_folder/crossmapped_to_hg19_$filename"
+	archive_destpath="$archive_folder/crossmapped_to_hg19_$filename"
 
 	if [ ! -f "$crossmap_destpath" ]; then 
 		if [ "$run_ncbi" == true ]; then
@@ -57,6 +69,7 @@ do
             failed_maps=$(grep "[^#].*Fail(.*" "$unmap_destpath".unmap | wc -l)
             if [ $max_failed_maps -eq -1 ] || [ $failed_maps -lt "$max_failed_maps" ]; then
                 mv "$unmap_destpath" "$crossmap_destpath"
+                mv "$filepath" "$archive_destpath"
             else
                 echo "reject because of too many fails" | tee -a "$log_file"
                 mv "$unmap_destpath" "$reject_folder"
