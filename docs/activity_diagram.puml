@@ -1,20 +1,29 @@
 @startuml
-(*) --> "Choose Diagnostic Panel"
---> "Provide Biopsy"
---> "Prepare Biopsy and Library"
---> "Targeted Sequencing"
+(*) --> "Clinicians provide biopsies (tumor samples) and order diagnostic panels"
+--> "Pathologists or scientists forward assignments to laboratory"
+--> "Laboratory extracts DNA/RNA from tumor samples and prepares NGS libraries for targeted sequencing"
 --> "CLC Workbench workflow"
 
 --> ===B1===
+--> "Pan Cancer Analysis (external)"
 --> "liftover remap zu hg19"
---> "MH Guide"
+--> "upload liftover files to MH Guide"
+--> "MH Guide provides final medical reports"
+--> ===B3===
+
+===B1=== --> "Panel analysis (including Pan Cancer Analysis internal)"
 --> ===B2===
 
-===B1=== --> "cnv analysis"
+===B1=== --> "CNV analysis"
 --> ===B2===
 
---> "sort and analyse excel files" 
---> "verify quality"
---> "provide diagnosis back to the client"
+===B2=== --> "verify/check quality"
+--> "sort and analyse excel files"
+--> "interpretation of sequence variants and/or copy number variations"
+--> "report sequence variants and/or copy number variations to the pathologists"
+--> "pathologists finalize and approve medical reports"
+--> ===B3===
+
+--> "provide diagnosis back to the clinicians"
 --> (*)
 @enduml
