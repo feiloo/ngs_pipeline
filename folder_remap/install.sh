@@ -1,6 +1,6 @@
 #!/bin/bash
 
-pip install --user CrossMap
+pip install CrossMap
 
 mkdir -vp /usr/local/etc
 mkdir -vp /usr/local/lib/systemd/system
