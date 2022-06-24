@@ -5,7 +5,7 @@
 --> "CLC Workbench workflow"
 
 --> ===B1===
---> "Pan Cancer Analysis (external)"
+--> "Pan Cancer analysis (external)"
 --> "liftover remap zu hg19"
 --> "upload liftover files to MH Guide"
 --> "MH Guide provides final medical reports"
@@ -17,10 +17,13 @@
 ===B1=== --> "CNV analysis"
 --> ===B2===
 
+===B1=== --> "RNA fusion analysis"
+--> ===B2===
+
 ===B2=== --> "verify/check quality"
 --> "sort and analyse excel files"
---> "interpretation of sequence variants and/or copy number variations"
---> "report sequence variants and/or copy number variations to the pathologists"
+--> "interpretation of sequence variants and/or copy number variations and/or fusions"
+--> "report sequence variants and/or copy number variations and/or fusions to the pathologists"
 --> "pathologists finalize and approve medical reports"
 --> ===B3===
 
