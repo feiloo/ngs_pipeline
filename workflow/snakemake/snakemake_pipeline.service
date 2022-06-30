@@ -1,0 +1,11 @@
+[Unit]
+Description=Run out snakemake workflow
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ngs_pipeline/run.sh
+Restart=on-failure
+RestartSec=120
+
+[Install]
+WantedBy=default.target
