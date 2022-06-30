@@ -1,57 +1,33 @@
 #!/bin/bash
 
-refgenome='/root/cnvdata/Homo_sapiens.GRCh37.dna.primary_assembly.fa'
-
-#SAMPLEID="s1"
-#input_amp_sample='/root/cnvdata/met_high_level_amp/hl_bam_bai/1008-18_S8_L001 (paired) Mapped UMI Reads.bam'
-#input_normal_sample='/root/cnvdata/met_no_amp/no_bam_bai/1527-20_S6_L001 (paired) Mapped UMI Reads.bam'
-
-SAMPLEID="s2"
-input_amp_sample='/root/cnvdata/met_high_level_amp/hl_bam_bai/1610-20_S13_L001 (paired) Mapped UMI Reads.bam'
-input_normal_sample='/root/cnvdata/met_no_amp/no_bam_bai/1609-20_S12_L001 (paired) Mapped UMI Reads.bam'
-
-OUT=purecn
-SAMPLEDIR=$OUT/$SAMPLEID
-
-mkdir -p $OUT/$SAMPLEID
-
-function copy () {
-cp -v "$input_amp_sample" $SAMPLEDIR/"$SAMPLEID"_tumor.bam
-cp -v "$input_normal_sample" $SAMPLEDIR/"$SAMPLEID"_normal.bam
-}
-
-tumoralignment="$SAMPLEDIR/"$SAMPLEID"_tumor.bam"
-normalalignment="$SAMPLEDIR/"$SAMPLEID"_normal.bam"
-out_interval="$SAMPLEDIR/"$SAMPLEID"_out_interval.txt"
-
-
-function interval () {
-Rscript $PURECN/IntervalFile.R --in-file /root/cnvdata/BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7.bed \
-    --fasta $refgenome \
-    --out-file $out_interval \
-    --off-target \
-    --genome hg19 
-    #--export /root/cnvdata/out_optimized.bed 
-}
-
-
 # genereate reference fasta, (needed for mutect)
 #java -jar CreateSequenceDictionary.jar R="$refgenome" O="/root/cnvdata/refdict.dict"
 # gatk CreateSequenceDictionary -R "$refgenome"
 #samples=$(/usr/local/bin/samtools samples "$normalalignment")
 
 function reheader () {
-# change sample name to TEST_SAMPLE_NAME
-java -jar picard.jar  AddOrReplaceReadGroups I=$normalalignment O="$normalalignment"_2 RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM="TEST_SAMPLE_NAME"
-java -jar picard.jar  AddOrReplaceReadGroups I=$tumoralignment O="$tumoralignment"_2 RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM="TEST_SAMPLE_NAME"
 
-mv -v "$normalalignment"_2 "$normalalignment"
-mv -v "$tumoralignment"_2 "$tumoralignment"
+
+# change sample name to TEST_SAMPLE_NAME
+java -jar picard.jar  AddOrReplaceReadGroups --INPUT "$input_tumor_sample" --OUTPUT "$tumoralignment" --RGID 1 --RGLB lib1 --RGPL illumina --RGPU unit1 --RGSM "TEST_SAMPLE_NAME"
+java -jar picard.jar  AddOrReplaceReadGroups --INPUT "$input_normal_sample" --OUTPUT "$normalalignment" --RGID 1 --RGLB lib1 --RGPL illumina --RGPU unit1 --RGSM "TEST_SAMPLE_NAME"
+
+#mv -v "$normalalignment"_2 "$normalalignment"
+#mv -v "$tumoralignment"_2 "$tumoralignment"
 
 samtools index "$tumoralignment"
 samtools index "$normalalignment"
 }
 
+function interval () {
+
+Rscript $PURECN/IntervalFile.R --in-file /root/cnvdata/BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7.bed \
+    --fasta "$refgenome" \
+    --out-file "$out_interval" \
+    --off-target \
+    --genome hg19 
+    #--export /root/cnvdata/out_optimized.bed 
+}
 
 function variant_calling () {
 gatk Mutect2 \
@@ -93,21 +69,65 @@ Rscript $PURECN/PureCN.R --out "$SAMPLEID" \
     --genome hg19 
 }
 
-copy
-echo "preparing"
-interval
-echo "fixing header"
-reheader
-echo "variant calling"
-variant_calling
-echo "coverages"
-coverages
 
-# run the above for each sample
-# because its needed for normaldb
-# then:
+function preprocess() {
+        mkdir -p $OUT/$SAMPLEID
 
-#echo "normaldb"
-#normaldb
-#echo "purecn"
-#purecn
+        echo "fixing header" && \
+        reheader && \
+        echo "preparing" && \
+        interval && \
+        echo "variant calling" && \
+        variant_calling && \
+        echo "coverages" && \
+        coverages
+}
+function run_cnv() {
+        # run the above for each sample
+        # because its needed for normaldb
+        # then:
+
+        echo "normaldb"
+        normaldb
+        echo "purecn"
+        purecn
+}
+
+OUT=purecn
+SAMPLEDIR=$OUT/$SAMPLEID
+
+refgenome='/root/cnvdata/Homo_sapiens.GRCh37.dna.primary_assembly.fa'
+
+
+SAMPLEID="s1"
+input_tumor_sample='/root/cnvdata/met_high_level_amp/hl_bam_bai/1008-18_S8_L001 (paired) Mapped UMI Reads.bam'
+input_normal_sample='/root/cnvdata/met_no_amp/no_bam_bai/1527-20_S6_L001 (paired) Mapped UMI Reads.bam'
+
+tumoralignment="$SAMPLEDIR/"$SAMPLEID"_tumor.bam"
+normalalignment="$SAMPLEDIR/"$SAMPLEID"_normal.bam"
+
+out_interval="$SAMPLEDIR/"$SAMPLEID"_out_interval.txt"
+
+preprocess
+
+
+SAMPLEID="s2"
+input_tumor_sample='/root/cnvdata/met_high_level_amp/hl_bam_bai/1610-20_S13_L001 (paired) Mapped UMI Reads.bam'
+input_normal_sample='/root/cnvdata/met_no_amp/no_bam_bai/1609-20_S12_L001 (paired) Mapped UMI Reads.bam'
+
+OUT=purecn
+SAMPLEDIR=$OUT/$SAMPLEID
+
+tumoralignment="$SAMPLEDIR/"$SAMPLEID"_tumor.bam"
+normalalignment="$SAMPLEDIR/"$SAMPLEID"_normal.bam"
+
+out_interval="$SAMPLEDIR/"$SAMPLEID"_out_interval.txt"
+
+preprocess
+
+
+
+SAMPLEID="s1"
+tumoralignment="$SAMPLEDIR/"$SAMPLEID"_tumor.bam"
+out_interval="$SAMPLEDIR/"$SAMPLEID"_out_interval.txt"
+run_cnv

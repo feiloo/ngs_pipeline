@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker build -t purecn .
+docker build -t localhost/purecn .
