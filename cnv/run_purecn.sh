@@ -5,6 +5,10 @@
 # gatk CreateSequenceDictionary -R "$refgenome"
 #samples=$(/usr/local/bin/samtools samples "$normalalignment")
 
+
+#tips:
+#java -jar picard.jar ValidateSamFile i=input.bam MODE=SUMMARY
+
 function reheader () {
 
 
@@ -42,16 +46,23 @@ gatk Mutect2 \
 
 
 function coverages () {
+# note, a negtive impact of gc-normalization is worth benchmarking in small panels (\ 0.5Mb)
 Rscript $PURECN/Coverage.R \
     --out-dir "$SAMPLEDIR" \
     --bam "$normalalignment" \
+    --force \
+    --intervals "$out_interval"
+
+Rscript $PURECN/Coverage.R \
+    --out-dir "$SAMPLEDIR" \
+    --bam "$tumoralignment" \
     --force \
     --intervals "$out_interval"
 }
 
 function normaldb() {
 
-ls -a "$OUT"/*/*_loess.txt.gz | cat > example_normal_coverages.list
+ls -a "$OUT"/*/*_normal_coverage_loess.txt.gz | cat > example_normal_coverages.list
 
 Rscript $PURECN/NormalDB.R --out-dir "purecn" \
     --coverage-files example_normal_coverages.list \
@@ -93,15 +104,17 @@ function run_cnv() {
         purecn
 }
 
-OUT=purecn
-SAMPLEDIR=$OUT/$SAMPLEID
 
 refgenome='/root/cnvdata/Homo_sapiens.GRCh37.dna.primary_assembly.fa'
 
 
 SAMPLEID="s1"
-input_tumor_sample='/root/cnvdata/met_high_level_amp/hl_bam_bai/1008-18_S8_L001 (paired) Mapped UMI Reads.bam'
+#input_tumor_sample='/root/cnvdata/met_high_level_amp/hl_bam_bai/1008-18_S8_L001 (paired) Mapped UMI Reads.bam'
+input_tumor_sample='/root/cnvdata/met_high_level_amp/hl_bam_bai/1198-21_S15_L001 (paired) Mapped UMI Reads.bam'
 input_normal_sample='/root/cnvdata/met_no_amp/no_bam_bai/1527-20_S6_L001 (paired) Mapped UMI Reads.bam'
+
+OUT=purecn
+SAMPLEDIR=$OUT/$SAMPLEID
 
 tumoralignment="$SAMPLEDIR/"$SAMPLEID"_tumor.bam"
 normalalignment="$SAMPLEDIR/"$SAMPLEID"_normal.bam"
@@ -126,8 +139,9 @@ out_interval="$SAMPLEDIR/"$SAMPLEID"_out_interval.txt"
 preprocess
 
 
-
-SAMPLEID="s1"
+SAMPLEID="s2"
+OUT=purecn
+SAMPLEDIR=$OUT/$SAMPLEID
 tumoralignment="$SAMPLEDIR/"$SAMPLEID"_tumor.bam"
 out_interval="$SAMPLEDIR/"$SAMPLEID"_out_interval.txt"
 run_cnv
