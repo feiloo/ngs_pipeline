@@ -10,38 +10,38 @@ actor Bioinformatician
 package "pathology workflow" {
   usecase "Develope ngs_pipeline" as develope
   usecase "provide tumor sample" as sample
-  usecase "get targeted diagnosis" as diagnosis
-  usecase "do biopsy peparation/analysis" as biopsy
+  usecase "get medical report" as diagnosis
+  usecase "order molecular pathology diagnosis" as order
+  usecase "tumor peparation/analysis" as biopsy
   usecase "get treatment" as treatment
-  usecase "get explanation/personal data" as explanation
-  usecase "provide diagnosis"
-  usecase "write diagnosis"
-
+  usecase "obtain medical discussion" as explanation
+  usecase "write medical report"
   usecase "provide documentation"
+  usecase "write previous findings"
 
   package "ngs pipeline" {
-    usecase "cnv analysis"
+    usecase "DNA/RNA analysis" as panel
+    usecase "CNV analysis"
     usecase "liftover remap"
-    usecase "monitor biopsy quality"
     usecase "provide logs"
   }
 
 }
 
 Bioinformatician --> (provide logs)
+Bioinformatician --> panel
+Bioinformatician --> (CNV analysis)
 Bioinformatician --> (provide documentation)
-
 Bioinformatician --> develope
-Bioinformatician --> (cnv analysis)
 Bioinformatician --> (liftover remap)
-Bioinformatician --> (monitor biopsy quality)
-Bioinformatician --> (write diagnosis)
+Bioinformatician --> (write previous findings)
 
 Doctor --> sample
+Doctor --> order
 Doctor --> diagnosis
 
 Pathologist --> biopsy
-Pathologist --> (write diagnosis)
+Pathologist --> (write medical report)
 
 Patient --> explanation
 Patient --> treatment
