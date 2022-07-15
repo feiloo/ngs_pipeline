@@ -1,25 +1,16 @@
 #!/bin/bash
 
-# genereate reference fasta, (needed for mutect)
-#java -jar CreateSequenceDictionary.jar R="$refgenome" O="/root/cnvdata/refdict.dict"
-# gatk CreateSequenceDictionary -R "$refgenome"
-#samples=$(/usr/local/bin/samtools samples "$normalalignment")
-
-
-#tips:
-#java -jar picard.jar ValidateSamFile i=input.bam MODE=SUMMARY
+# might need to validate files
+# java -jar picard.jar ValidateSamFile i=input.bam MODE=SUMMARY
 
 function reheader () {
 
 
 # change sample name to TEST_SAMPLE_NAME
 java -jar picard.jar  AddOrReplaceReadGroups --INPUT "$input_tumor_sample" --OUTPUT "$tumoralignment" --RGID 1 --RGLB lib1 --RGPL illumina --RGPU unit1 --RGSM "TEST_SAMPLE_NAME"
-java -jar picard.jar  AddOrReplaceReadGroups --INPUT "$input_normal_sample" --OUTPUT "$normalalignment" --RGID 1 --RGLB lib1 --RGPL illumina --RGPU unit1 --RGSM "TEST_SAMPLE_NAME"
-
-#mv -v "$normalalignment"_2 "$normalalignment"
-#mv -v "$tumoralignment"_2 "$tumoralignment"
-
 samtools index "$tumoralignment"
+
+java -jar picard.jar  AddOrReplaceReadGroups --INPUT "$input_normal_sample" --OUTPUT "$normalalignment" --RGID 1 --RGLB lib1 --RGPL illumina --RGPU unit1 --RGSM "TEST_SAMPLE_NAME"
 samtools index "$normalalignment"
 }
 
@@ -28,17 +19,21 @@ function interval () {
 Rscript $PURECN/IntervalFile.R --in-file /root/cnvdata/BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7.bed \
     --fasta "$refgenome" \
     --out-file "$out_interval" \
-    --off-target \
     --genome hg19 
+    #--off-target \
     #--export /root/cnvdata/out_optimized.bed 
 }
 
 function variant_calling () {
+java -jar /root/picard.jar CreateSequenceDictionary \
+    -R "$refgenome" \
+    -O "$refgenome".dict 
+
+samtools faidx "$refgenome" -o "$refgenome".fai
+
 gatk Mutect2 \
     -R "$refgenome" \
     -I "$tumoralignment" \
-    -I "$normalalignment" \
-    -normal "TEST_SAMPLE_NAME" \
     --genotype-germline-sites true --genotype-pon-sites true \
     --interval-padding 75 \
     -O "$tumoralignment""_mutect.vcf"
