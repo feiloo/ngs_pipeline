@@ -1,7 +1,9 @@
 [Unit]
 Description=Run folder_remap every 5 minutes
-RefuseManualStart=no  # Allow manual starts
-RefuseManualStop=no   # Allow manual stops
+# Allow manual starts
+RefuseManualStart=no
+# Allow manual stops
+RefuseManualStop=no
 
 [Timer]
 #Execute job if it missed a run due to machine being off
