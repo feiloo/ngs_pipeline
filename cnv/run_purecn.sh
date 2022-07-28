@@ -5,15 +5,21 @@
 
 # constants, if updated, create at least a new release of the pipeline
 #refgenome='/root/cnvdata/Homo_sapiens.GRCh37.dna.primary_assembly.fa'
-refgenome='/root/cnvdata/Homo_sapiens.GRCh38.dna.primary_assembly.fa'
+OUT=purecn
+tmpdir=purecn_tmp
+
+refgenome='/root/cnvdata/Homo_sapiens.GRCh37.dna.primary_assembly.fa'
 out_interval="$OUT"/"BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7_interval.txt"
 
 process_matched_panel_of_normal_dir="/root/cnvdata/process_matched_panel_of_normals"
 tumor_sample_dir="/root/cnvdata/met_high_level_amp/hl_fastq"
-OUT=purecn
-tmpdir=purecn_tmp
 
 shopt -s nullglob
+
+# overwrite echo to write to stderr
+#function echo () {
+    #echo $1 >&2
+#}
 
 function interval () {
 Rscript $PURECN/IntervalFile.R --in-file /root/cnvdata/BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7.bed \
@@ -111,6 +117,16 @@ java -jar picard.jar FastqToSam \
 
 }
 
+# error in the normal sample: 1669-20_S10_L001_R1_001\ \(paired)\ Mapped\ UMI\ Reads.bam
+# umi643550_count1 has the cigar 2S3P4I119M but short soft clipped (2S) and the following P is not allowed by samtools
+# apparently this is fixed by picards FilterSamReads
+
+filter_malformed_reads () {
+    # printreads has this filter enabled by default
+    # drawback: it might filter other things too, like mated reads
+    gatk PrintReads -I "$1" -O "$2"
+}
+
 function preprocess_sample() {
         # preprocess a normal sample, tumor sample or tumor and matched normal
         sampledir=$1
@@ -128,11 +144,12 @@ function preprocess_sample() {
 
         # ugly, but preserves all information and ensures identity
         processdir="$tmpdir/$sampledir/$samplefile"
-        mkdir -p $processdir
+        mkdir -p "$processdir"
     
         if [[ samplefile != "" ]]; then
-            echo "fast_to_ubam"
-            fast_to_ubam "$sampledir/$samplefile" "$processdir/sample.bam"
+            #echo "fast_to_ubam"
+            #fast_to_ubam "$sampledir/$samplefile" "$processdir/sample.bam"
+            filter_malformed_reads "$sampledir/$samplefile" "$processdir/sample.bam"
             
             echo "reheadering" 
             reheader "$processdir"/sample.bam "$processdir/reheadered.bam"
@@ -181,11 +198,9 @@ echo "preprocess process matched panel of normals"
 sampledir="$process_matched_panel_of_normal_dir"
 for normal_sample in "$sampledir"/*;
 do
-    echo processing $sampledir $(basename $normal_sample)
-    preprocess_sample "$sampledir" "$tumorsample" $(basename "$normal_sample")
-    exit
+    echo processing $sampledir $(basename "$normal_sample")
+    preprocess_sample "$sampledir" "" "$(basename "$normal_sample")"
 done
-
 
 echo "preprocess process tumor samples"
 sampledir="$tumor_sample_dir"
