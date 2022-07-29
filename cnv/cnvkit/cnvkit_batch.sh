@@ -1,0 +1,1 @@
+cnvkit.py batch hl_bam_bai/*.bam --normal process_matched_panel_of_normals/*.bam --targets BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7.bed  --fasta Homo_sapiens.GRCh37.dna.primary_assembly.fa --access BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7.bed --output-reference my_reference.cnn --output-dir results --diagram --scatter
