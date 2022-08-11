@@ -11,7 +11,7 @@ tmpdir=purecn_tmp
 refgenome='/root/cnvdata/Homo_sapiens.GRCh37.dna.primary_assembly.fa'
 out_interval="$OUT"/"BED_selection_QIAseq_Lungenpanelv2_all_targets_only_MET_Chr7_interval.txt"
 
-process_matched_panel_of_normal_dir="/root/cnvdata/process_matched_panel_of_normals"
+process_matched_panel_of_normal_dir="/root/cnvdata/normals_original"
 tumor_sample_dir="/root/cnvdata/met_high_level_amp/hl_fastq"
 
 shopt -s nullglob
@@ -113,7 +113,8 @@ java -jar picard.jar FastqToSam \
     -F1 "$1" \
     -O "$2" \
     -SM TEST_SAMPLE_NAME \
-    -RG lib1
+    -RG lib1 \
+    -PL illumina
 
 }
 
@@ -125,6 +126,13 @@ filter_malformed_reads () {
     # printreads has this filter enabled by default
     # drawback: it might filter other things too, like mated reads
     gatk PrintReads -I "$1" -O "$2"
+}
+
+function merge_ubam {
+    java -jar picard.jar MergeSamFiles \
+        -I "$1" \
+        -I "$2" \
+        -O "$3"
 }
 
 function preprocess_sample() {
@@ -149,10 +157,14 @@ function preprocess_sample() {
         if [[ samplefile != "" ]]; then
             #echo "fast_to_ubam"
             #fast_to_ubam "$sampledir/$samplefile" "$processdir/sample.bam"
-            filter_malformed_reads "$sampledir/$samplefile" "$processdir/sample.bam"
+            #filter_malformed_reads "$sampledir/$samplefile" "$processdir/sample.bam"
+            fast_to_ubam "$sampledir/$samplefile" "$processdir/sample_R1.bam"
+            fast_to_ubam "$sampledir/$(basename "$samplefile" R1_001.fastq.gz)R2_001.fastq.gz" "$processdir/sample_R2.bam"
+            merge_ubam "$processdir/sample_R1.bam" "$processdir/sample_R2.bam" "$processdir/sample.bam" 
             
+            exit 1
             echo "reheadering" 
-            reheader "$processdir"/sample.bam "$processdir/reheadered.bam"
+            reheader "$processdir/sample.bam" "$processdir/reheadered.bam"
 
             echo "variant calling"
             variant_call "$processdir/reheadered.bam" "" "$processdir/reheadered.vcf.gz"
@@ -160,6 +172,8 @@ function preprocess_sample() {
             echo "sample coverage"
             coverage "$processdir/reheadered.vcf.gz" "$processdir"
         else
+            echo "not yet implemented"
+            exit 1
             echo "reheadering" 
             reheader "$sampledir/$tumor" "$processdir/reheadered_tumor.bam"
 
@@ -191,8 +205,8 @@ function run_cnv() {
 
 
 echo "calculate interval"
-interval
-index_refgenome
+#interval
+#index_refgenome
 
 echo "preprocess process matched panel of normals"
 sampledir="$process_matched_panel_of_normal_dir"
