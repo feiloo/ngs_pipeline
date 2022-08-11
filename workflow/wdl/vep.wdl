@@ -1,74 +1,70 @@
-version 1.1
+version development
+
+# for reproducibility and efficiency reasons you have to provide the reference files in a ${refdir}
+# you can obtain them for example like this:
+# 
+# wget -P reference/ http://ftp.ensembl.org/pub/release-104/variation/indexed_vep_cache/homo_sapiens_refseq_vep_104_GRCh37.tar.gz 
+# tar xzf reference/homo_sapiens_refseq_vep_104_GRCh37.tar.gz --directory reference/
+# wget -P reference http://ftp.ensembl.org/pub/grch37/current/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
+# gzip -d -c reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz > reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa
+# bgzip -c reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz > reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
 
 task vep {
   input {	
 		File sample
+		Directory refdir 
+		#File primary_assembly 
+		File filters
 	} 
 
+  # ensemblorg/ensembl-vep:release_104.3 segfaults when running with compressed fasta like:
+  # Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
+  # therefore we run with the .fa instead
   command {
-		wget -P reference http://ftp.ensembl.org/pub/release-104/variation/indexed_vep_cache/homo_sapiens_refseq_vep_104_GRCh37.tar.gz 
-		tar xzf reference/homo_sapiens_refseq_vep_104_GRCh37.tar.gz --directory reference/
-		wget -P reference http://ftp.ensembl.org/pub/grch37/current/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
-		gzip -d -c reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz > reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa
-		bgzip -c reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz > reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
-	  ./vep \
-			-input_file $sample \
-			--offline \
+	  /opt/vep/src/ensembl-vep/vep \
+			-input_file ${sample} \
 			--cache \
 			--cache_version 104 \
-			--dir_cache reference/ \
+			--dir_cache ${refdir}/ \
 			--refseq \
 			--hgvs \
 			--hgvsg \
-			--fasta reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz \
+			--fasta ${refdir}/Homo_sapiens.GRCh37.dna.primary_assembly.fa \
 			--format vcf \
 			--vcf \
 			--check_ref \
 			--dont_skip \
 			--force_overwrite \
 			--no_stats \
-			-o stdout | \
-		./filter_vep \
+			--offline \
+			-o output && \
+	/opt/vep/src/ensembl-vep/filter_vep \
 		  --force_overwrite  \
-		  --filter '
-			  Feature matches NM_002529 or \
-			  Feature matches NM_006180 or \
-			  Feature matches NM_001012338 or \
-			  Feature matches NM_020975 or \
-			  Feature matches NM_005343 or \
-			  Feature matches NM_000455 or \
-			  Feature matches NM_203500 or \
-			  Feature matches NM_004304 or \
-			  Feature matches NM_004333 or \
-			  Feature matches NM_001904 or \
-			  Feature matches NM_005228 or \
-			  Feature matches NM_023110 or \
-			  Feature matches NM_000141 or \
-		    (Feature matches NM_022970 and EXON is 8/18) or \
-			  Feature matches NM_000142 or \
-			  Feature matches NM_213647 or \
-			  Feature matches NM_004448 or \
-			  Feature matches NM_033360 or \
-			  Feature matches NM_002755 or \
-			  Feature matches NM_001127500 or \
-			  Feature matches NM_002524 or \
-			  Feature matches NM_006218 or \
-			  Feature matches NM_000314 or \
-			  Feature matches NM_000546 or \
-			  Feature matches NM_002944 or \
-			  Feature matches NM_005896 or \
-			  Feature matches NM_002168
-			  ' \
 		  --only_matched \
-		  	-output_file vep
+		  --filter "read_string(filters)" \
+		  -output_file filtered_output 
 	}
 
 	output {
-		File vep = 'vep'
+		File vep = 'filtered_output'
 	}
 	
   runtime {
-    #docker: 'ensemblorg/ensembl-vep:release_104.3'
-    docker: 'ensembl'
+    docker: 'ensemblorg/ensembl-vep:release_104.3'
   }
+}
+
+workflow vep_wf {
+	input {
+	  File sample
+	  File filters
+	  Directory refdir
+	}
+
+	call vep {
+		input: sample=sample, 
+		refdir=refdir,
+		filters=filters,
+	}
+
 }
