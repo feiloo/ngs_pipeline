@@ -1,0 +1,11 @@
+.*.vcf
+.*.bam
+.*.sam\s
+.*.sql
+.*.csv
+.*.xlsx
+.*.docx
+.*.pdf
+.*.json
+.*.csv
+.*.sql
