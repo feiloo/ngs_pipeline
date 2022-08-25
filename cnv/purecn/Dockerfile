@@ -1,9 +1,7 @@
 FROM markusriester/purecn:latest
 
 RUN apt-get update && apt-get install -y samtools parallel
-
-COPY picard.jar /root/picard.jar
-COPY workflow_utils.sh /usr/local/bin
+RUN wget -P root https://github.com/broadinstitute/picard/releases/download/2.27.4/picard.jar
 
 WORKDIR /root/cnvdata
 

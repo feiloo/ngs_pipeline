@@ -1,10 +1,10 @@
 #!/bin/bash
-mkdir ~/cnvdata
+#mkdir ~/cnvdata
 
-cp -v run_purecn.sh ~/cnvdata
+cp -v run_purecn.sh /data/fhoelsch/cnvdata
 docker run -it \
     --rm \
-    -v ~/cnvdata:/root/cnvdata \
+    -v /data/fhoelsch/cnvdata:/root/cnvdata \
     localhost/purecn \
     /bin/bash
 
