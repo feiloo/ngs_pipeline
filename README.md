@@ -13,6 +13,13 @@ in the next few months, we want to have an automatic workflow containing:
     
 this project is mostly for documentation, but secondly aimed at bioinformatic clinicians, researchers and brave developers wanting to run their own pipeline.
 
+## compliance
+
+to avoid commiting possibly sensitive data, there is a scanning script in compliance.
+it's executed during `meson test` and pre-commit.
+
+it's recommended to regularily check and extend that script with aggressive patterns for sensitive data detection.
+
 
 ## build
 
@@ -24,14 +31,14 @@ this project is mostly for documentation, but secondly aimed at bioinformatic cl
 ## build commands
 
 ```
-meson setup builddir
+meson setup /tmp/builddir
+cd /tmp/builddir
 meson configure -Doption=value
-
-# might need to additionally run when changin the buildscripts
-meson --reconfigure builddir
-
-cd builddir
-
 meson compile -v
 meson test
 ```
+
+# when changing the buildscripts sometimes you might need to run:
+```meson --reconfigure /tmp/builddir```
+
+
