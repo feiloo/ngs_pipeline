@@ -11,6 +11,9 @@ from copy import copy
 
 parser = argparse.ArgumentParser(description='check repo for sensitive data')
 parser.add_argument('repo_path', type=pathlib.Path)
+parser.add_argument('blacklist_mimetypes', type=pathlib.Path)
+parser.add_argument('blacklist_files', type=pathlib.Path)
+parser.add_argument('whitelist_files', type=pathlib.Path)
 
 args = parser.parse_args()
 
@@ -18,18 +21,18 @@ path = args.repo_path
 
 mime_blacklist = set()
 
-with open('blacklist_mimetypes', 'r') as f:
+with open(args.blacklist_mimetypes, 'r') as f:
     for line in f.readlines():
         mime_blacklist.add(str(line).strip())
 
 filename_blacklist = []
-with open('blacklist_files', 'r') as f:
+with open(args.blacklist_files, 'r') as f:
     for line in f.readlines():
         filename_blacklist.append(str(line).strip())
 blacklist_pattern = re.compile("|".join(filename_blacklist))
 
 filename_whitelist = []
-with open('whitelist_files', 'r') as f:
+with open(args.whitelist_files, 'r') as f:
     for line in f.readlines():
         filename_whitelist.append(str(line).strip())
 whitelist_pattern = re.compile("|".join(filename_whitelist))
@@ -53,5 +56,16 @@ for filepath in bad_files_copy:
     if whitelist_pattern.match(str(filepath)) is not None:
         bad_files.discard(filepath)
 
-for filepath in bad_files:
-    print(filepath)
+sensitive_data_warning_msg = '''sensitive data found. 
+Remove the sensitive files or they end up in a public repository.
+If the data in question is not sensitive, carefully add an exception to compliance/whitelist_files.
+Consider aggressively extending the blacklists.
+
+problematic files:'''
+
+if len(bad_files) > 0:
+    print(sensitive_data_warning_msg)
+
+    for filepath in bad_files:
+        print(filepath)
+    exit(1)
