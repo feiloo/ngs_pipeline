@@ -1,0 +1,11 @@
+[Unit]
+Description=Continuously poll for updates of the ngs pipeline, download changes and install
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/update_pipeline.sh 2>&1
+Restart=on-failure
+RestartSec=120
+
+[Install]
+WantedBy=default.target
