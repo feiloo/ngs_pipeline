@@ -9,4 +9,3 @@ project('ngs_pipeline')
 
 subdir('compliance')
 subdir('folder_remap')
-subdir('continuous_deployment')
