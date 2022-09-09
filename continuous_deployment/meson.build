@@ -1,4 +1,4 @@
-#executable('update_pipeline', 'update_pipeline.sh', install : true) #install_dir : 'my/special/dir')
+executable('update_pipeline', 'update_pipeline.sh', install : true) #install_dir : 'my/special/dir')
 install_data('update_pipeline.sh', install_mode : 'r-xr-xr--', install_dir : get_option('prefix') / get_option('bindir'))
 
 # installing as systemd system service for now, as use services don't seem to be supported

@@ -36,9 +36,17 @@ cd /tmp/builddir
 meson configure -Doption=value
 meson compile -v
 meson test
+./continuous_deployment/release.sh
 ```
 
+note: release.sh doesn't deploy, but marks a commit as a release
+the productions server automatically try pulling the latest releases with update_pipeline.sh 
+the production server then switches blue/green to the new version
+if monitoring detects a failure, production is automatically rolled back to previous code version
+
 # when changing the buildscripts sometimes you might need to run:
-```meson --reconfigure /tmp/builddir```
+```
+meson --reconfigure /tmp/builddir
+```
 
 
