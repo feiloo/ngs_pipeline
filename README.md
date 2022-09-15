@@ -21,6 +21,7 @@ it's executed during `meson test` and pre-commit.
 it's recommended to regularily check and extend that script with aggressive patterns for sensitive data detection.
 
 
+
 ## build
 
 # dependencies
@@ -36,17 +37,25 @@ cd /tmp/builddir
 meson configure -Doption=value
 meson compile -v
 meson test
-./continuous_deployment/release.sh
+meson dist
 ```
 
-note: release.sh doesn't deploy, but marks a commit as a release
-the productions server automatically try pulling the latest releases with update_pipeline.sh 
-the production server then switches blue/green to the new version
-if monitoring detects a failure, production is automatically rolled back to previous code version
+meson dist creates a tarball from the latest commit, not the current dir
+the productions server automatically tries pulling the latest dist tarball
 
+```
 # when changing the buildscripts sometimes you might need to run:
-```
 meson --reconfigure /tmp/builddir
 ```
 
 
+### dependencies
+
+pip:
+meson
+python
+miniwdl
+
+zypper:
+ninja
+plantuml
