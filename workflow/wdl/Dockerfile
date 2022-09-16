@@ -1,4 +1,4 @@
-FROM ensemblorg/ensembl-vep:release_104.3
+FROM docker.io/opensuse/leap
 
-USER root
-RUN mkdir -p /var/lib/apt/lists/partial && apt-get update && apt-get install -y wget tar gzip tabix
+RUN zypper install -y python310 python310-pip
+
