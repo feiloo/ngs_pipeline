@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+<style>
+table, th, td {
+border: 1px solid black;
+border-collapse: collapse;
+}
+.sample_sheet {
+height: 720px;
+width: 480px;
+}
+summary {
+}
+</style>
+
+<title>Ngs Pipeline</title>
+</head>
+
+<body>
+
+ <div>Date (today): {{ date }}</div>
+ <hr></hr>
+
+ <div>Upload table (click or Drag and Drop)
+	 <form method=post enctype=multipart/form-data action="/upload_tracking_table">
+		 <input type=file name=file>
+		 <div>
+		 <input type=submit value=upload>
+		 </div>
+	 </form>
+ </div>
+ <hr></hr>
+
+ <div>
+  <h3>BRCAness</h3>
+  <details>
+   <summary> expand </summary>
+  <form method=post action="/brcaness_table_submit">
+
+  <table>
+   <tr>
+   </tr>
+     <th></th>
+     <th>ng</th>
+     <th>ul</th>
+   <tr>
+     <th>BRCAness</th>
+     <th><input type="text" name="BRCAness" /></th>
+     <th>{{ brca }}</th>
+   </tr>
+   <tr>
+     <th>nNGM (DNA)</th>
+     <th></th>
+     <th></th>
+   </tr>
+   <tr>
+     <th>nNGM (RNA)</th>
+     <th></th>
+     <th></th>
+   </tr>
+   </tr>
+  </table>
+  <input type=submit value=submit>
+  </form>
+  </details>
+ </div>
+ <hr></hr>
+
+ <div>
+ <h2> Tracking Table </h2>
+
+ <form method=post name="tracking_table_form" action='/tracking_table_submit'>
+ <table>
+  <tr>
+    <th>row_number</th>
+    <th>Kit</th>
+    <th>Mol-Nr.</th>
+    <th>Concentration</th>
+    <th>Index1</th>
+    <th>Index2</th>
+    <th>Probe</th>
+    <th>Aqua</th>
+  </tr>
+  {% for row in rows %}
+  <tr>
+    {% for key in row.keys() %}
+     <td>
+      <input type="text" name='row_{{ row["row_number"] }}_{{ key }}' value="{{ row[key] }}" />
+     </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+  <tr>
+    <td>column1</td>
+    <td>column2</td>
+    <td>column3</td>
+  </tr>
+ </table> 
+ 
+ <input type=submit value=submit>
+ </form>
+
+ </div>
+ <hr></hr>
+
+ <div>
+ <h3> Generated Sample Sheet </h3>
+ <details>
+  <summary>
+   expand
+  </summary>
+   <textarea readonly class="sample_sheet">
+   {{ sample_sheet }}
+   </textarea>
+ </details>
+ <div>
+
+</body>
+</html>

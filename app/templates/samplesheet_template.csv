@@ -1,0 +1,19 @@
+[Header]
+IEMFileVersion, 1
+Experiment Name,{{ experiment_name }}
+Date,{{ date }}
+Workflow,GenerateFASTQ
+Application,FASTQ Only
+Instrument Type,MiSeq
+Assay,Nextera XT
+Index Adapters,"Nextera XT v2 Index Kit B"
+Chemistry,Amplicon
+[Reads]{% for read in reads %}
+{{ read }}{% endfor %}
+[Settings]
+CustomRead1PrimerMix,C1
+ReverseComplement,0
+Adapter,CTGTCTCTTATACACATCT
+[Data]
+Sample_ID,Sample_Plate,Sample_Well,I7_Index_ID,index,I5_Index_ID,index2,Sample_Project,Description{% for sample in samples %}
+{{ sample }}{% endfor %}
