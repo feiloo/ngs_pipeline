@@ -1,2 +1,4 @@
 ./workflow/wdl/homo_sapiens_GRCh37.vcf
 .*/workflow/wdl/homo_sapiens_GRCh37.vcf
+./app/templates/\w*.csv
+./app/templates/\w*.html
