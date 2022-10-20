@@ -1,0 +1,27 @@
+@startuml
+start
+:FileMaker DB;
+:Patho Web App|
+:Illumina Sample Sheet;
+split
+  :MiSeq;
+  switch (CLC Workbench)
+  case (mode1)
+    :Panel;
+  case (mode2)
+    :Fusion;
+  case (mode3)
+    :CNV;
+  endswitch
+split again
+  :NovaSeq/NextSeq;
+  switch (CLC Workbench)
+  case (mode4)
+    :PanCancer;
+  case (mode5)
+    :tExom;
+  endswitch
+end split
+:medical report;
+stop
+@enduml
