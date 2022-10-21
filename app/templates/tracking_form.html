@@ -33,10 +33,9 @@ summary {
  <hr></hr>
 
  <div>
-  <h3>BRCAness</h3>
+  <h3>Sample size targets</h3>
   <details>
    <summary> expand </summary>
-  <form method=post action="/brcaness_table_submit">
 
   <table>
    <tr>
@@ -46,23 +45,22 @@ summary {
      <th>ul</th>
    <tr>
      <th>BRCAness</th>
-     <th><input type="text" name="BRCAness" /></th>
-     <th>{{ brca }}</th>
+     <th>{{ sample_size_targets['brcaness_mass'] }}</th>
+     <th>{{ sample_size_targets['brcaness_volume'] }}</th>
    </tr>
    <tr>
      <th>nNGM (DNA)</th>
-     <th></th>
-     <th></th>
+     <th>{{ sample_size_targets['DNA_mass'] }}</th>
+     <th>{{ sample_size_targets['DNA_mass'] }}</th>
    </tr>
    <tr>
      <th>nNGM (RNA)</th>
-     <th></th>
-     <th></th>
+     <th>{{ sample_size_targets['RNA_mass'] }}</th>
+     <th>{{ sample_size_targets['RNA_mass'] }}</th>
    </tr>
    </tr>
   </table>
-  <input type=submit value=submit>
-  </form>
+
   </details>
  </div>
  <hr></hr>
@@ -86,19 +84,14 @@ summary {
   <tr>
     {% for key in row.keys() %}
      <td>
-      <input type="text" name='row_{{ row["row_number"] }}_{{ key }}' value="{{ row[key] }}" />
+      <input type="text" name='row_{{ row["row_number"] }}_{{ key }}' value="{{ row[key] }}"  required/>
      </td>
     {% endfor %}
   </tr>
   {% endfor %}
-  <tr>
-    <td>column1</td>
-    <td>column2</td>
-    <td>column3</td>
-  </tr>
  </table> 
  
- <input type=submit value=submit>
+ <input type=submit value=save>
  </form>
 
  </div>
@@ -106,6 +99,9 @@ summary {
 
  <div>
  <h3> Generated Sample Sheet </h3>
+ <form>
+   <input type=submit value=generate>
+ </form>
  <details>
   <summary>
    expand
