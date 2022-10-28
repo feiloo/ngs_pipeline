@@ -1,21 +1,17 @@
 import os
 from flask import Flask, render_template, flash, request, redirect, url_for
 from werkzeug.utils import secure_filename
-#from datetime import datetime
+from math import ceil
 import datetime
 import json
 
-from constants import *
-
-from math import ceil
-
-import requests
 
 import pandas as pd
-from pydantic import BaseModel
-
 from itertools import groupby
 import pickle
+
+from constants import *
+
 
 UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'xlsx'}
@@ -28,78 +24,7 @@ config_path = '/etc/ngs_pipeline_config.json'
 with open(config_path, 'r') as f:
     config = json.loads(f.read())
 
-
-session_url = 'https://ukb1144/fmi/data/v1/databases/molpatho_Leistungserfassung/sessions'
-
-assert 'couchdb_user' in config
-assert 'couchdb_psw' in config
-assert 'filemaker_user' in config
-assert 'filemaker_psw' in config
-assert 'filemaker_server' in config
-
-def get_token():
-    r = requests.post(
-            session_url, 
-            auth=(config['filemaker_user'],config['filemaker_psw']), 
-            verify=False,
-            headers={'Content-Type': 'application/json'})
-    
-
-    # filemakers session tokens last for 15 minutes
-    ttl = 60*14
-    cache_timer = (datetime.datetime.now() + datetime.timedelta(ttl)).timestamp()
-    with open('/tmp/fmrest_cache','w') as f:
-        d = json.dumps({'token':r.json(), 'time':str(cache_timer)})
-        f.write(d)
-
-def auth():
-    if not os.path.exists('/tmp/fmrest_cache'):
-        get_token()
-
-    with open('/tmp/fmrest_cache','r') as f:
-        d = json.loads(f.read())
-
-    cache_time = datetime.datetime.fromtimestamp(ceil(float(d['time'])))
-    if cache_time < datetime.datetime.now():
-        get_token()
-
-    token = d['token']['response']['token']
-    return token
-
-fm_baseurl = f"https://{config['filemaker_server']}/fmi/data/v1/databases"
-
-def get_records():
-    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/records?_limit=10&_offset=40000'
-    r = requests.get(
-            record_url, 
-            verify=False,
-            headers={'Content-Type': 'application/json',
-                "Authorization": f"Bearer {token}"}
-                )
-    return r.json()
-
-def find_records():
-    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
-    d = json.dumps({"query":[{"Zeitstempel":">=10/18/2022"}],
-                "limit":100
-                })
-    r = requests.post(
-            record_url, 
-            data=d,
-            verify=False,
-            headers={'Content-Type': 'application/json',
-                "Authorization": f"Bearer {token}"}
-                )
-    return r.json()
-    
-#token = auth()
-#records = get_records()
-#records = find_records()
-#print(records)
-
-#print(records['response']['data'][0]['fieldData'])
-
-#exit()
+exit()
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
@@ -109,42 +34,8 @@ tracking_sheet = {"date": datetime.datetime.now(),
         "sample_sheet": None
         }
 
-# see miseq-sample-sheet-quick-ref-guide-15028392-j.pdf for more info
-sample_sheet_defaults = {
-        'Workflow':'GenerateFASTQ',
-        'Application': 'FASTQ Only',
-        'Instrument Type': 'MiSeq',
-        'Assay': 'Nextera XT',
-        'Index Adapters': 'Nextera XT v2 Index Kit B',
-        'Chemistry': 'Amplicon',
-        'Reads': READS,
-        'CustomRead1PrimerMix': 'C1',
-        'ReverseComplement': 0,
-        'Adapter': ADAPTER
-        }
-
-
-class TrackingFormLine(BaseModel):
-    row_number: int
-    kit: str
-    molnr: str
-    concentration: float
-    index1: str
-    index2: str
-    probe: float
-    aqua: float
-
-class TrackingForm(BaseModel):
-    date: datetime.datetime
-    #lines: list[TrackingFormLine]
-
-class Patient(BaseModel):
-    mp_nr: str
-    untersuchungen: list
-
-class PathoUntersuchung(BaseModel):
-    untersuchungstyp: str # u_type
-    ''' one of oncohs, ... '''
+with open('~/fm_example_record.json', 'r') as f:
+    example_record = json.loads(f.read().replace("'", '"'))
 
 
 
@@ -161,21 +52,8 @@ def _get_table_html(tracking_sheet):
     return render_template('tracking_form.html', 
             date=date, rows=rows, sample_sheet=sample_sheet,
             sample_size_targets=sample_size_targets,
+            days=['yesterday', 'today'],
             )
-
-
-def generate_samplesheet(tracking_sheet):
-    sample_sheet_values = sample_sheet_defaults
-    date = tracking_sheet['date']
-    sample_sheet_values['date'] = date
-    sample_sheet_values['experiment_name'] = date.strftime('%d%m%Y')
-    
-    data = tracking_sheet['tracking']
-    samples = [f"{d['molnr']},,,{d['index1']},todo,{d['index2']},todo,," for d in data]
-    sample_sheet_values['samples'] = samples
-
-    csv = render_template('samplesheet_template.csv', **sample_sheet_values)
-    return csv
 
 def validate_molnr(x):
     try:
