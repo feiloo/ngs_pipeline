@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<style>
+</style>
+
+<title>Ngs Pipeline Dashboard</title>
+</head>
+
+<body>
+ <h1>Pipeline Dashboard</h1>
+
+ <div>
+  Pipeline Version: {{ pipeline_version }}
+ </div>
+ <div>
+  Pipeline Input: 
+ <div>
+  {{ pipeline_input }}
+ </div>
+ </div>
+
+ <div>
+  Progress:
+  <div>
+   <progress value="{{pipeline_progress}}" max="100"> {{pipeline_progress}}% </progress>
+  </div>
+  <div>
+   Pipeline status: {{ pipeline_status }}
+  </div>
+
+  <div>
+   <form method=post name="pipeline_start" action='/pipeline_start' style='display: inline-block;'>
+    <button type="submit" value="Start">Start</button>
+   </form><form method=post name="pipeline_stop" action='/pipeline_stop' style='display: inline-block;'>
+    <button type="submit" value="stop">Stop</button>
+   </form>
+  </div>
+ </div>
+
+
+</body>
+

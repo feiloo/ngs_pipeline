@@ -24,8 +24,6 @@ config_path = '/etc/ngs_pipeline_config.json'
 with open(config_path, 'r') as f:
     config = json.loads(f.read())
 
-exit()
-
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
 
@@ -34,10 +32,10 @@ tracking_sheet = {"date": datetime.datetime.now(),
         "sample_sheet": None
         }
 
+'''
 with open('~/fm_example_record.json', 'r') as f:
     example_record = json.loads(f.read().replace("'", '"'))
-
-
+'''
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -99,7 +97,6 @@ def upload_form():
 
     return redirect('/')
 
-
 @app.route("/tracking_table_submit", methods=['POST'])
 def tracking_form():
     app.logger.info(f'r {request.form}')
@@ -115,6 +112,29 @@ def tracking_form():
     if tracking_sheet['tracking'] != [{}]:
         tracking_sheet['sample_sheet'] = generate_samplesheet(tracking_sheet)
     return redirect('/')
+
+PIPELINE_VERSION = '0.0.1'
+
+PROGRESS = [10]
+
+def _get_pipeline_dashboard_html():
+    PROGRESS[0] += 10
+    progress = PROGRESS[0]
+    return render_template('pipeline_dashboard.html', 
+            pipeline_version=PIPELINE_VERSION,
+            pipeline_progress=progress,
+            pipeline_status='running',
+            pipeline_input='Fall 1, Fall 2',
+            )
+
+@app.route("/pipeline_start", methods=['POST'])
+def start_pipeline():
+    app.logger.info('start pipeline')
+    return redirect('/pipeline_status')
+
+@app.route("/pipeline_status", methods=['GET'])
+def pipeline_status():
+    return _get_pipeline_dashboard_html()
 
 
 @app.route("/", methods=['GET', 'POST'])
