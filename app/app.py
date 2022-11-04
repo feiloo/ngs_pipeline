@@ -11,7 +11,10 @@ from itertools import groupby
 import pickle
 
 from constants import *
-import pycouchdb
+import requests
+
+from couchdb_api import Server, Database
+import couchdb_api
 
 
 UPLOAD_FOLDER = '/tmp/uploads'
@@ -32,10 +35,11 @@ with open('~/fm_example_record.json', 'r') as f:
     example_record = json.loads(f.read().replace("'", '"'))
 '''
 
-server = pycouchdb.Server(f"http://{config['couchdb_user']}:{config['couchdb_psw']}@localhost:8001/")
-app_db = server.database('ngs_app')
-case_db = server.database('ngs_app')
+auth = couchdb_api.BasicAuth(config['couchdb_user'], config['couchdb_psw'])
+server = Server('localhost', port=8001, auth=auth)
+app_db = server.get_db('ngs_app')
 
+#case_db = server.get_db('ngs_cases')
 
 def validate_molnr(x):
     try:
@@ -64,13 +68,15 @@ def _get_pipeline_dashboard_html():
             pipeline_input='Fall 1, Fall 2',
             )
 
-miseq_output_folder = '/PAT-Sequenzer/Daten/MiSeqOutput'
+#miseq_output_folder = '/PAT-Sequenzer/Daten/MiSeqOutput'
+miseq_output_folder = 'testdata'
+
 polling_interval = 5*60 # every 5 minutes
 
 # the default naming scheme is
 # YYMMDD_<InstrumentNumber>_<Run Number>_<FlowCellBarcode>
 # see illumina: miseq-system-guide-15027617-06-1.pdf
-# page 44
+# page 44 Appendix B output Files and Folders
 def parse_output_name(name):
     try:
         datestr, instrument_number, run_number, flow_cell_barcode = name.split('_')
@@ -84,7 +90,7 @@ def parse_output_name(name):
             }
 
     except:
-        raise RuntimeException('incorrect miseq run root folder name')
+        raise RuntimeError('incorrect miseq run root folder name')
 
     return d
 
@@ -103,20 +109,20 @@ def read_samplesheet(path):
     # rough sanity check
     # todo: better parsing of the samplesheets
     if data_offset < 20:
-        raise RuntimeException("unexpected samplesheet format")
+        raise RuntimeError("unexpected samplesheet format")
     if len(data) == 0:
-        raise RuntimeException("unexpected samplesheet, data segment not detected")
+        raise RuntimeError("unexpected samplesheet, data segment not detected")
 
     expected_data_header = 'Sample_ID,Description,I7_Index_ID,index,I5_Index_ID,index2,Sample_Project,Sample_Plate,Sample_Well'
     if lines[data_offset+1].strip() != expected_data_header:
-        raise RuntimeException('unexpected samplesheet data header, cant parse')
+        raise RuntimeError('unexpected samplesheet data header, cant parse')
 
     mp_numbers = []
 
     for line in data:
         cells = line.split(',')
-        sample_id, description, i7_index_id, i5_index_id = cells[0:3]
-        index2, sample_project, sample_plate, sample_well = cells[3:6]
+        sample_id, description, i7_index_id, i5_index_id = cells[0:4]
+        index2, sample_project, sample_plate, sample_well = cells[4:8]
 
         mp_numbers.append(sample_id)
 
@@ -125,7 +131,7 @@ def read_samplesheet(path):
 
 def poll_sequencer_output():
     # first, sync runs with miseq output
-    doc = app_db.get("sequencer_runs")
+    doc = app_db.get_doc("sequencer_runs")
     runs = set(doc['run_names'])
 
     miseq_output_runs = os.listdir(miseq_output_folder)
@@ -134,7 +140,7 @@ def poll_sequencer_output():
         ' Run folders are missing, Miseq outputs must be immutable'
         ' and never deleted for archival and consistency reasons'
 
-        raise RuntimeException(error_msg)
+        raise RuntimeError(error_msg)
 
     # new as in newly detected, not necessarily more recent in time
     new_runs = list(set(miseq_output_runs) - runs)
@@ -143,13 +149,17 @@ def poll_sequencer_output():
         return
     else:
         new_doc = {"_id":"sequencer_runs", 
-                "run_names": list(new_run)}
-        app_db.save(new_doc)
+                "_rev":doc['_rev'],
+                "run_names": list(new_runs),
+                }
+        app_db.put_doc(new_doc)
 
     for run in new_runs:
-        samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet')
+        samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet.csv')
         run_table = read_samplesheet(samplesheet_path)
 
+def collect_case_numbers():
+    pass
 
 def poll_filemaker_data():
     pass
@@ -157,7 +167,7 @@ def poll_filemaker_data():
 
 def _start_pipeline():
     poll_sequencer_output()
-    collect_case_numbers()
+    #collect_case_numbers()
     poll_filemaker_data()
     #suprocess.run(['miniwdl', '
 

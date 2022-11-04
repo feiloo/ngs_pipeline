@@ -37,6 +37,8 @@ class Database:
         response = requests.get(
                 f"{self.url}/{self.dbname}/{docid}", 
                 auth=self._request_auth)
+        if response.status_code != 200:
+            raise RuntimeError(response.json())
         return response.json()
 
     def put_doc(self, doc):
@@ -45,6 +47,8 @@ class Database:
                 f"{self.url}/{self.dbname}/{docid}", 
                 data=json.dumps(doc),
                 auth=self._request_auth)
+        if response.status_code != 200:
+            raise RuntimeError(response.json())
         return response.json()
 
     def find(self, query):
@@ -53,6 +57,8 @@ class Database:
                 headers={'Content-Type':'application/json'},
                 data=json.dumps(query),
                 auth=self._request_auth)
+        if response.status_code != 200:
+            raise RuntimeError(response.json())
         return response.json()
 
 
