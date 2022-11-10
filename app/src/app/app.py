@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, flash, request, redirect, url_for
+from flask import Flask, render_template, flash, request, redirect, url_for, g, current_app, Blueprint
 from werkzeug.utils import secure_filename
 from math import ceil
 import datetime
@@ -10,34 +10,18 @@ import pandas as pd
 from itertools import groupby
 import pickle
 
-from constants import *
+from app.constants import *
 import requests
 
-from couchdb_api import Server, Database
-import couchdb_api
+import couch.couch as couch
 
+from app.samplesheet import read_samplesheet
 
 UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'xlsx'}
 
-app = Flask(__name__)
-app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+admin = Blueprint('admin', __name__, url_prefix='/admin')
 
-config_path = '/etc/ngs_pipeline_config.json'
-with open(config_path, 'r') as f:
-    config = json.loads(f.read())
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
-
-'''
-with open('~/fm_example_record.json', 'r') as f:
-    example_record = json.loads(f.read().replace("'", '"'))
-'''
-
-auth = couchdb_api.BasicAuth(config['couchdb_user'], config['couchdb_psw'])
-server = Server('localhost', port=8001, auth=auth)
-app_db = server.get_db('ngs_app')
 
 #case_db = server.get_db('ngs_cases')
 
@@ -69,7 +53,7 @@ def _get_pipeline_dashboard_html():
             )
 
 #miseq_output_folder = '/PAT-Sequenzer/Daten/MiSeqOutput'
-miseq_output_folder = 'testdata'
+miseq_output_folder = '/data/private_testdata/miseq_output_testdata'
 
 polling_interval = 5*60 # every 5 minutes
 
@@ -95,43 +79,10 @@ def parse_output_name(name):
     return d
 
 
-def read_samplesheet(path):
-    # this is run on the output sample sheets, not the input
-    lines = []
-    with open(path, 'r') as f:
-        lines = f.readlines()
-
-    s_lines = list(map(lambda x: x.strip(), lines))
-    data_offset = s_lines.index('[Data]')
-    # data_offset + 1 because there is a header line
-    data = lines[data_offset+1:]
-
-    # rough sanity check
-    # todo: better parsing of the samplesheets
-    if data_offset < 20:
-        raise RuntimeError("unexpected samplesheet format")
-    if len(data) == 0:
-        raise RuntimeError("unexpected samplesheet, data segment not detected")
-
-    expected_data_header = 'Sample_ID,Description,I7_Index_ID,index,I5_Index_ID,index2,Sample_Project,Sample_Plate,Sample_Well'
-    if lines[data_offset+1].strip() != expected_data_header:
-        raise RuntimeError('unexpected samplesheet data header, cant parse')
-
-    mp_numbers = []
-
-    for line in data:
-        cells = line.split(',')
-        sample_id, description, i7_index_id, i5_index_id = cells[0:4]
-        index2, sample_project, sample_plate, sample_well = cells[4:8]
-
-        mp_numbers.append(sample_id)
-
-    return mp_numbers
-
-
-def poll_sequencer_output():
+def poll_sequencer_output(app_db):
     # first, sync runs with miseq output
-    doc = app_db.get_doc("sequencer_runs")
+    doc = app_db.get("sequencer_runs")
+    print(doc)
     runs = set(doc['run_names'])
 
     miseq_output_runs = os.listdir(miseq_output_folder)
@@ -152,11 +103,12 @@ def poll_sequencer_output():
                 "_rev":doc['_rev'],
                 "run_names": list(new_runs),
                 }
-        app_db.put_doc(new_doc)
+        app_db.put(new_doc)
 
     for run in new_runs:
         samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet.csv')
         run_table = read_samplesheet(samplesheet_path)
+
 
 def collect_case_numbers():
     pass
@@ -165,29 +117,71 @@ def poll_filemaker_data():
     pass
 
 
-def _start_pipeline():
-    poll_sequencer_output()
+def _start_pipeline(app_db):
+    poll_sequencer_output(app_db)
     #collect_case_numbers()
-    poll_filemaker_data()
+    #poll_filemaker_data()
     #suprocess.run(['miniwdl', '
 
 
-@app.route("/pipeline_start", methods=['POST'])
+@admin.route("/pipeline_start", methods=['POST'])
 def start_pipeline():
-    app.logger.info('start pipeline')
-    _start_pipeline()
+    current_app.logger.info('start pipeline')
+    app_db = get_db(current_app)
+    _start_pipeline(app_db)
 
     return redirect('/pipeline_status')
 
-@app.route("/pipeline_stop", methods=['POST'])
+@admin.route("/pipeline_stop", methods=['POST'])
 def stop_pipeline():
     app.logger.info('stop pipeline')
     return redirect('/pipeline_status')
 
-@app.route("/pipeline_status", methods=['GET'])
+@admin.route("/pipeline_status", methods=['GET'])
 def pipeline_status():
     return _get_pipeline_dashboard_html()
 
 
+def create_app(config):
+    app = Flask(__name__)
+    app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+    app.config.from_mapping(config)
+
+    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
+
+    '''
+    with open('~/fm_example_record.json', 'r') as f:
+        example_record = json.loads(f.read().replace("'", '"'))
+    '''
+
+
+    return app
+
+
+def get_db(app):
+    if app.testing == True:
+        auth = couch.BasicAuth('testuser', 'testpsw')
+    else:
+        auth = couch.BasicAuth(config['couchdb_user'], config['couchdb_psw'])
+
+    if 'server' not in g:
+        server = couch.Server('localhost', port=8001, auth=auth)
+        g.server = server
+    if 'app_db' not in g:
+        app_db = server.get_db('ngs_app')
+        g.app_db = app_db
+
+    return g.app_db
+
+
+def close_db(e=None):
+    db = g.pop('app_db', None)
+
 if __name__ == '__main__':
+    config_path = '/etc/ngs_pipeline_config.json'
+    with open(config_path, 'r') as f:
+        config = json.loads(f.read())
+
+    app = create_app(config)
     app.run(host='0.0.0.0', port=8000, debug=True)

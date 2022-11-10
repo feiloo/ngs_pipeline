@@ -1,0 +1,21 @@
+[build-system]
+requires = [
+  "setuptools",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "NGS_Pipeline"
+version = "0.0.1"
+dependencies = [
+"flask",
+"requests",
+"pytest",
+"pandas",
+"couch @ git+https://github.com/feiloo/python_couch.git",
+]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+    ]
