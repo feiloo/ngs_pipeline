@@ -10,18 +10,17 @@ import pandas as pd
 from itertools import groupby
 import pickle
 
-from app.constants import *
 import requests
 
 import couch.couch as couch
 
-from app.samplesheet import read_samplesheet
+from constants import *
+from samplesheet import read_samplesheet
 
 UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'xlsx'}
 
-admin = Blueprint('admin', __name__, url_prefix='/admin')
-
+admin = Blueprint('admin', __name__, url_prefix='/')
 
 #case_db = server.get_db('ngs_cases')
 
@@ -40,20 +39,18 @@ def validate_molnr(x):
 
 PIPELINE_VERSION = '0.0.1'
 
-PROGRESS = [10]
 
 def _get_pipeline_dashboard_html():
-    PROGRESS[0] += 10
-    progress = PROGRESS[0]
+    progress = _fetch_workflow_progress()
+    inputs = str(get_db(current_app).get('sequencer_runs')['run_names'])
     return render_template('pipeline_dashboard.html', 
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status='running',
-            pipeline_input='Fall 1, Fall 2',
+            pipeline_input=inputs,
             )
 
 #miseq_output_folder = '/PAT-Sequenzer/Daten/MiSeqOutput'
-miseq_output_folder = '/data/private_testdata/miseq_output_testdata'
 
 polling_interval = 5*60 # every 5 minutes
 
@@ -82,10 +79,10 @@ def parse_output_name(name):
 def poll_sequencer_output(app_db):
     # first, sync runs with miseq output
     doc = app_db.get("sequencer_runs")
-    print(doc)
     runs = set(doc['run_names'])
 
-    miseq_output_runs = os.listdir(miseq_output_folder)
+
+    miseq_output_runs = os.listdir(app.config['data']['miseq_output_folder'])
     if runs - set(miseq_output_runs):
         error_msg = 'One or more previous Miseq output'
         ' Run folders are missing, Miseq outputs must be immutable'
@@ -102,23 +99,30 @@ def poll_sequencer_output(app_db):
         new_doc = {"_id":"sequencer_runs", 
                 "_rev":doc['_rev'],
                 "run_names": list(new_runs),
+                "ngs_workflow_state": 'not_started'
                 }
         app_db.put(new_doc)
 
-    for run in new_runs:
-        samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet.csv')
-        run_table = read_samplesheet(samplesheet_path)
+    #return new_runs
 
 
-def collect_case_numbers():
-    pass
 
 def poll_filemaker_data():
     pass
 
 
+def _fetch_workflow_progress():
+    return 0
+
 def _start_pipeline(app_db):
-    poll_sequencer_output(app_db)
+    new_runs = poll_sequencer_output(app_db)
+    miseq_output_folder = app.config['data']['miseq_output_folder']
+
+    #case_numbers = []
+    #for run in new_runs:
+    #    samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet.csv')
+    #    run_table = read_samplesheet(samplesheet_path)
+
     #collect_case_numbers()
     #poll_filemaker_data()
     #suprocess.run(['miniwdl', '
@@ -145,25 +149,22 @@ def pipeline_status():
 def create_app(config):
     app = Flask(__name__)
     app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
-    app.config.from_mapping(config)
+    app.config['data'] = config
 
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
+    app.register_blueprint(admin)
 
     '''
     with open('~/fm_example_record.json', 'r') as f:
         example_record = json.loads(f.read().replace("'", '"'))
     '''
 
-
     return app
 
 
 def get_db(app):
-    if app.testing == True:
-        auth = couch.BasicAuth('testuser', 'testpsw')
-    else:
-        auth = couch.BasicAuth(config['couchdb_user'], config['couchdb_psw'])
+    auth = couch.BasicAuth(app.config['data']['couchdb_user'], app.config['data']['couchdb_psw'])
 
     if 'server' not in g:
         server = couch.Server('localhost', port=8001, auth=auth)
@@ -179,9 +180,16 @@ def close_db(e=None):
     db = g.pop('app_db', None)
 
 if __name__ == '__main__':
-    config_path = '/etc/ngs_pipeline_config.json'
-    with open(config_path, 'r') as f:
-        config = json.loads(f.read())
+    demo = True
+    if demo == True:
+        config = {"couchdb_user":'testuser','couchdb_psw':'testpsw',
+            'miseq_output_folder':'/data/private_testdata/miseq_output_testdata'
+            }
+
+    else:
+        config_path = '/etc/ngs_pipeline_config.json'
+        with open(config_path, 'r') as f:
+            config = json.loads(f.read())
 
     app = create_app(config)
     app.run(host='0.0.0.0', port=8000, debug=True)

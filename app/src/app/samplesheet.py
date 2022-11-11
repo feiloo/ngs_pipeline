@@ -1,4 +1,4 @@
-from app.constants import *
+from constants import *
 
 # see miseq-sample-sheet-quick-ref-guide-15028392-j.pdf for more info
 sample_sheet_defaults = {
