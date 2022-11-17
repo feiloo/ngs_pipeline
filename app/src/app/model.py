@@ -2,6 +2,35 @@ import datetime
 
 from pydantic import BaseModel
 
+runformat: ['miseq_0', 'only_fastq']
+
+
+'''
+document_types:
+    - pipeline_run
+    - sequencer_run
+    - patient_result
+    - study_reference
+'''
+
+class BaseDocument(BaseModel):
+    data_model_version: str
+    document_type: str
+    #pipeline_version: str
+    #workflow_version: str
+
+
+class MolYearNumber(BaseModel):
+    molnumber: int
+    molyear: int
+
+class MiSeqRunOutputRef(BaseModel):
+    # the path on the PAT sequencer NAS
+    path: str
+    samplesheet: str
+    fastq: list #[str]
+    has_logs: bool
+
 class TrackingFormLine(BaseModel):
     row_number: int
     kit: str
@@ -19,7 +48,7 @@ class TrackingForm(BaseModel):
 
 class Examination(BaseModel):
     ''' medical examination '''
-    untersuchungstyp: str # u_type
+    examinationtype: str # u_type
     ''' one of oncohs, ... '''
 
 class Person(BaseModel):
@@ -28,7 +57,7 @@ class Person(BaseModel):
 
 class Patient(Person):
     mp_nr: str
-    untersuchungen: list
+    examinations: list
     birthdate: datetime.datetime
     gender: str
 
@@ -37,7 +66,7 @@ class Pathologist(Person):
     short_name: str
 
 
-#we need to create different axonomical concepts for "workflow"
+#we need to create different taxonomical concepts for "workflow"
 # patho_workflow is the generalization of a ngs_panel 
 # that also includes manual steps like library preparation
 # this will be modeled by the according manual descriptions
@@ -60,7 +89,7 @@ database_stub = [
         "case_ref": {
             "molnr":2132, 
             "year":2022, 
-            "untersuchungstyp":"oncohs",
+            "examinationtype":"oncohs",
             },
         "workflow": {
             "patho_workflow_uri": "uri",

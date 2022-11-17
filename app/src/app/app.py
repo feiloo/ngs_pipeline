@@ -14,15 +14,24 @@ import requests
 
 import couch.couch as couch
 
-from constants import *
-from samplesheet import read_samplesheet
+from app.constants import *
+from app.samplesheet import read_samplesheet
+from app.model import SequencerRun
 
+PIPELINE_VERSION = '0.0.1'
 UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'xlsx'}
 
 admin = Blueprint('admin', __name__, url_prefix='/')
-
 #case_db = server.get_db('ngs_cases')
+
+'''
+document_types:
+    - pipeline_run
+    - sequencer_run
+    - patient_result
+    - study_reference
+'''
 
 def validate_molnr(x):
     try:
@@ -37,7 +46,6 @@ def validate_molnr(x):
     except:
         return False
 
-PIPELINE_VERSION = '0.0.1'
 
 
 def _get_pipeline_dashboard_html():
@@ -50,15 +58,13 @@ def _get_pipeline_dashboard_html():
             pipeline_input=inputs,
             )
 
-#miseq_output_folder = '/PAT-Sequenzer/Daten/MiSeqOutput'
 
-polling_interval = 5*60 # every 5 minutes
 
 # the default naming scheme is
 # YYMMDD_<InstrumentNumber>_<Run Number>_<FlowCellBarcode>
 # see illumina: miseq-system-guide-15027617-06-1.pdf
 # page 44 Appendix B output Files and Folders
-def parse_output_name(name):
+def parse_run_output_name(name):
     try:
         datestr, instrument_number, run_number, flow_cell_barcode = name.split('_')
 
@@ -82,7 +88,7 @@ def poll_sequencer_output(app_db):
     runs = set(doc['run_names'])
 
 
-    miseq_output_runs = os.listdir(app.config['data']['miseq_output_folder'])
+    miseq_output_runs = os.listdir(current_app.config['data']['miseq_output_folder'])
     if runs - set(miseq_output_runs):
         error_msg = 'One or more previous Miseq output'
         ' Run folders are missing, Miseq outputs must be immutable'
@@ -99,11 +105,10 @@ def poll_sequencer_output(app_db):
         new_doc = {"_id":"sequencer_runs", 
                 "_rev":doc['_rev'],
                 "run_names": list(new_runs),
-                "ngs_workflow_state": 'not_started'
                 }
         app_db.put(new_doc)
 
-    #return new_runs
+    return new_runs
 
 
 
@@ -114,18 +119,31 @@ def poll_filemaker_data():
 def _fetch_workflow_progress():
     return 0
 
+
 def _start_pipeline(app_db):
     new_runs = poll_sequencer_output(app_db)
-    miseq_output_folder = app.config['data']['miseq_output_folder']
+    miseq_output_folder = current_app.config['data']['miseq_output_folder']
 
-    #case_numbers = []
-    #for run in new_runs:
+    molnumbers = []
+
+    '''
+    for run in new_runs:
+        run_path = os.path.join(miseq_output_folder, run)
+        for f in os.listdir(run_path):
+            parse_fastq_name(f)
+
+        samplesheet_path = os.path.join(run_path, 'SampleSheet.csv')
+        run_molnumbers = []
     #    samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet.csv')
     #    run_table = read_samplesheet(samplesheet_path)
 
     #collect_case_numbers()
     #poll_filemaker_data()
-    #suprocess.run(['miniwdl', '
+    #suprocess.run(['miniwdl',...])
+    '''
+
+def _stop_pipeline(app_db):
+    pass
 
 
 @admin.route("/pipeline_start", methods=['POST'])
@@ -133,35 +151,19 @@ def start_pipeline():
     current_app.logger.info('start pipeline')
     app_db = get_db(current_app)
     _start_pipeline(app_db)
-
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_stop", methods=['POST'])
 def stop_pipeline():
     app.logger.info('stop pipeline')
+    app_db = get_db(current_app)
+    _stop_pipeline(app_db)
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_status", methods=['GET'])
 def pipeline_status():
+    current_app.logger.info('pipeline status')
     return _get_pipeline_dashboard_html()
-
-
-def create_app(config):
-    app = Flask(__name__)
-    app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
-    app.config['data'] = config
-
-    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
-    app.register_blueprint(admin)
-
-    '''
-    with open('~/fm_example_record.json', 'r') as f:
-        example_record = json.loads(f.read().replace("'", '"'))
-    '''
-
-    return app
-
 
 def get_db(app):
     auth = couch.BasicAuth(app.config['data']['couchdb_user'], app.config['data']['couchdb_psw'])
@@ -179,11 +181,26 @@ def get_db(app):
 def close_db(e=None):
     db = g.pop('app_db', None)
 
+
+def create_app(config):
+    app = Flask(__name__)
+    app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+    app.config['data'] = config
+
+    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
+    app.register_blueprint(admin)
+
+    return app
+
+
 if __name__ == '__main__':
     demo = True
     if demo == True:
-        config = {"couchdb_user":'testuser','couchdb_psw':'testpsw',
-            'miseq_output_folder':'/data/private_testdata/miseq_output_testdata'
+        config = {"couchdb_user":'testuser',
+            'couchdb_psw':'testpsw',
+            'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
+            'ngs_pipeline_output':'/data/ngs_pipeline_output'
             }
 
     else:
