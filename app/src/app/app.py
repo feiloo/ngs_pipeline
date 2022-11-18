@@ -16,7 +16,6 @@ import couch.couch as couch
 
 from app.constants import *
 from app.samplesheet import read_samplesheet
-from app.model import SequencerRun
 
 PIPELINE_VERSION = '0.0.1'
 UPLOAD_FOLDER = '/tmp/uploads'
@@ -33,21 +32,6 @@ document_types:
     - study_reference
 '''
 
-def validate_molnr(x):
-    try:
-        m, y = x.split('/',1)
-
-        if not m.isnumeric():
-            return False
-        if not y.isnumeric():
-            return False
-
-        return True
-    except:
-        return False
-
-
-
 def _get_pipeline_dashboard_html():
     progress = _fetch_workflow_progress()
     inputs = str(get_db(current_app).get('sequencer_runs')['run_names'])
@@ -59,34 +43,10 @@ def _get_pipeline_dashboard_html():
             )
 
 
-
-# the default naming scheme is
-# YYMMDD_<InstrumentNumber>_<Run Number>_<FlowCellBarcode>
-# see illumina: miseq-system-guide-15027617-06-1.pdf
-# page 44 Appendix B output Files and Folders
-def parse_run_output_name(name):
-    try:
-        datestr, instrument_number, run_number, flow_cell_barcode = name.split('_')
-
-        date = datetime.strptime('%y%m%d')
-        d = {
-            "date":date,
-            "instrument_number": instrument_number,
-            "run_number": run_number,
-            "flow_cell_barcode": flow_cell_barcode
-            }
-
-    except:
-        raise RuntimeError('incorrect miseq run root folder name')
-
-    return d
-
-
 def poll_sequencer_output(app_db):
     # first, sync runs with miseq output
     doc = app_db.get("sequencer_runs")
     runs = set(doc['run_names'])
-
 
     miseq_output_runs = os.listdir(current_app.config['data']['miseq_output_folder'])
     if runs - set(miseq_output_runs):
