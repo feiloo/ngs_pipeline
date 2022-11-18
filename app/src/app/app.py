@@ -5,6 +5,7 @@ from math import ceil
 import datetime
 import json
 import subprocess
+from pathlib import path
 
 import pandas as pd
 from itertools import groupby
@@ -16,13 +17,13 @@ import couch.couch as couch
 
 from app.constants import *
 from app.samplesheet import read_samplesheet
+from parsers import parse_fastq_name, parse_miseq_run_name
 
 PIPELINE_VERSION = '0.0.1'
 UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'xlsx'}
 
 admin = Blueprint('admin', __name__, url_prefix='/')
-#case_db = server.get_db('ngs_cases')
 
 '''
 document_types:
@@ -31,6 +32,9 @@ document_types:
     - patient_result
     - study_reference
 '''
+
+def _fetch_workflow_progress():
+    return 0
 
 def _get_pipeline_dashboard_html():
     progress = _fetch_workflow_progress()
@@ -44,54 +48,56 @@ def _get_pipeline_dashboard_html():
 
 
 def poll_sequencer_output(app_db):
-    # first, sync runs with miseq output
-    doc = app_db.get("sequencer_runs")
-    runs = set(doc['run_names'])
+    # first, sync db with miseq output data
+    miseq_output_path = Path(current_app.config['data']['miseq_output_folder'])
+    miseq_output_runs = [miseq_output_path / x for x in miseq_output_path.iterdir()]
+    for run_name in miseq_output_runs:
+        try:
+            parsed = parse_miseq_run_name(run_name))
+            dirty=False
+        except:
+            parsed = {}
+            dirty=True
 
-    miseq_output_runs = os.listdir(current_app.config['data']['miseq_output_folder'])
-    if runs - set(miseq_output_runs):
-        error_msg = 'One or more previous Miseq output'
-        ' Run folders are missing, Miseq outputs must be immutable'
-        ' and never deleted for archival and consistency reasons'
-
-        raise RuntimeError(error_msg)
-
-    # new as in newly detected, not necessarily more recent in time
-    new_runs = list(set(miseq_output_runs) - runs)
-
-    if len(new_runs) == 0:
-        return
-    else:
-        new_doc = {"_id":"sequencer_runs", 
-                "_rev":doc['_rev'],
-                "run_names": list(new_runs),
+        # run folder name doesnt adhere to illumina naming convention
+        # because it has been renamed or manually copied
+        # we save the parsed information too, so we can efficiently query the runs
+        run_document = {
+                'document_type':'sequencer_run',
+                'original_path':run_name, 
+                'name_dirty':dirty, 
+                'parsed':parsed, 
+                'indexed_time':str(datetime.now())
                 }
-        app_db.put(new_doc)
+        runs.append(run_document)
 
-    return new_runs
+    doc = app_db.get("sequencer_runs")
+    new_doc = {"_id":"sequencer_runs", 
+            "_rev":doc['_rev'],
+            "run_names": list(new_runs),
+            }
+    app_db.put(new_doc)
 
 
 
 def poll_filemaker_data():
+    # poll recent filemaker data
     pass
 
 
-def _fetch_workflow_progress():
-    return 0
-
-
 def _start_pipeline(app_db):
-    new_runs = poll_sequencer_output(app_db)
+    poll_sequencer_output(app_db)
+    poll_filemaker_data()
     miseq_output_folder = current_app.config['data']['miseq_output_folder']
 
     molnumbers = []
 
-    '''
     for run in new_runs:
         run_path = os.path.join(miseq_output_folder, run)
         for f in os.listdir(run_path):
             parse_fastq_name(f)
 
+    '''
         samplesheet_path = os.path.join(run_path, 'SampleSheet.csv')
         run_molnumbers = []
     #    samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet.csv')

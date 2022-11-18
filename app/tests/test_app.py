@@ -20,17 +20,12 @@ def db(config):
 
 @pytest.fixture()
 def app(db, config):
-
     app = create_app(config)
     app.config.update({
         "TESTING": True,
     })
 
-    # other setup can go here
-
     yield app
-
-    # clean up / reset resources here
 
 
 @pytest.fixture()
@@ -49,11 +44,13 @@ def app_db(app):
         return get_db(app)
 
 
+'''
 def test_request_example(client):
     response = client.get("/pipeline_status")
+'''
 
 
-def test_db(app_db):
+def test_create_document(app_db):
     init_doc = {"_id":"sequencer_runs", 
             "run_names": [],
             }
@@ -62,12 +59,12 @@ def test_db(app_db):
 
     #_start_pipeline(app_db)
     res = app_db.get('sequencer_runs')
-    init_doc.pop('_rev')
     res.pop('_rev')
     assert res == init_doc
 
 
 
+'''
 def test_poll_sequencer_output(app_db, app):
     init_doc = {"_id":"sequencer_runs", 
             "run_names": [],
@@ -79,11 +76,12 @@ def test_poll_sequencer_output(app_db, app):
         _start_pipeline(app_db)
         res = app_db.get('sequencer_runs')
         assert res['run_names'] == ['220831_M03135_0376_000000000-KHR5V']
+'''
 
 
 
 
-    '''
-    with open('~/fm_example_record.json', 'r') as f:
-        example_record = json.loads(f.read().replace("'", '"'))
-    '''
+'''
+with open('~/fm_example_record.json', 'r') as f:
+    example_record = json.loads(f.read().replace("'", '"'))
+'''

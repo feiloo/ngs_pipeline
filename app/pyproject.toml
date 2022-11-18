@@ -12,6 +12,7 @@ dependencies = [
 "requests",
 "pytest",
 "pandas",
+"pydantic",
 "couch @ git+https://github.com/feiloo/python_couch.git",
 ]
 
