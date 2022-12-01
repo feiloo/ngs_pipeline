@@ -59,7 +59,6 @@ def test_create_document(app_db):
 
     #_start_pipeline(app_db)
     res = app_db.get('sequencer_runs')
-    res.pop('_rev')
     assert res == init_doc
 
 
