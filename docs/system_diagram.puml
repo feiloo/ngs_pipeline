@@ -1,0 +1,49 @@
+@startuml
+database couchdb [
+Couchdb
+====
+persistent cache
+----
+search indizes
+----
+metadata
+]
+
+component "webapp pipeline control"
+component "miniwdl pipeline"
+component "clc workflow"
+
+component "nexus"
+
+database "cancer databases"
+
+storage "PAT NAS"
+
+"nexus" --> "webapp pipeline control" : "request ngs"
+"nexus" --> "webapp pipeline control" : "reply ngs result"
+
+"webapp pipeline control" --> couchdb : "read metadata"
+"webapp pipeline control" --> couchdb : "write metadata"
+
+"webapp pipeline control" --> "PAT NAS" : "scrape metadata"
+
+"webapp pipeline control" --> "miniwdl pipeline": start
+"webapp pipeline control" --> "miniwdl pipeline": stop
+
+"miniwdl pipeline" --> "PAT NAS": "save files"
+
+"miniwdl pipeline" --> "cancer databases": "use"
+
+usecase "annotate cases"
+usecase "custom ngs pipeline"
+"annotate cases" -- "webapp pipeline control"
+"custom ngs pipeline" -- "webapp pipeline control"
+
+"miniwdl pipeline" --> "clc workflow" : calls
+"miniwdl pipeline" <-- "clc workflow" : results
+
+couchdb --> "PAT NAS" : "references files"
+
+node "sequencer"
+"sequencer" --> "PAT NAS" : "saves files"
+@enduml
