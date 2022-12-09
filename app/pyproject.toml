@@ -5,12 +5,13 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "NGS_Pipeline"
+name = "ngs_pipeline"
 version = "0.0.1"
 dependencies = [
 "flask",
 "requests",
 "pytest",
+"click",
 "pandas",
 "pydantic",
 "couch @ git+https://github.com/feiloo/python_couch.git",
@@ -21,3 +22,6 @@ dependencies = [
 addopts = [
     "--import-mode=importlib",
     ]
+
+[project.scripts]
+ngs_pipeline = "app.app:main"

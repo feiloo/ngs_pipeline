@@ -11,6 +11,7 @@ import multiprocessing
 import pandas as pd
 from itertools import groupby
 import pickle
+import click
 
 import requests
 
@@ -88,7 +89,6 @@ def poll_filemaker_data():
 def collect_new_runs():
     pass
    
-
 new_sequencer_output = [{
     "_id": "aca32811be1156e2999434c5e9008294",
     "_rev": "1-18128c3e411e8a02f569645acb150ae5",
@@ -115,7 +115,7 @@ def _pipeline_process_fn():
             }
     app_db.put(doc)
 
-def _run_pipeline():
+def _run_pipeline(workflow, inputs):
     app_db = get_db(current_app)
     doc = {
             '_id': 'pipeline_state',
@@ -124,15 +124,26 @@ def _run_pipeline():
             'finish_time':str(datetime.now())
             }
     app_db.put(doc)
-    p = multiprocessing.Process(target=pipeline_process_fn, args=())
+    p = multiprocessing.Process(target=_pipeline_process_fn, args=())
     p.start()
 
+def setup_db(app_db):
+    map_fn = '''
+    function (doc) {
+      if(doc.document_type == 'sequencer_run')
+        emit(doc, 1);
+        }
+    '''
+    response = db.put_design('runs', {'views':{'aview':{"map":map_fn}}})
+
 def _start_pipeline(app_db):
-    #poll_sequencer_output(app_db)
+    poll_sequencer_output(app_db)
     poll_filemaker_data()
     miseq_output_folder = current_app.config['data']['miseq_output_folder']
 
     molnumbers = []
+
+    known_runs = db.get_design_view('runs', 'aview', None)
 
     '''
     for run in new_runs:
@@ -140,8 +151,6 @@ def _start_pipeline(app_db):
         for f in os.listdir(run_path):
             parsed = parse_fastq_name(f)
     '''
-
-
     '''
         samplesheet_path = os.path.join(run_path, 'SampleSheet.csv')
         run_molnumbers = []
@@ -178,8 +187,6 @@ def stop_pipeline():
 @admin.route("/pipeline_status", methods=['GET'])
 def pipeline_status():
     current_app.logger.info('pipeline status')
-
-    #current_app.logger.info(g.pipeline_process)
     return _get_pipeline_dashboard_html()
 
 def get_db(app):
@@ -211,19 +218,41 @@ def create_app(config):
     return app
 
 
-if __name__ == '__main__':
-    demo = True
-    if demo == True:
-        config = {"couchdb_user":'testuser',
-            'couchdb_psw':'testpsw',
-            'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
-            'ngs_pipeline_output':'/data/ngs_pipeline_output'
+@click.group()
+@click.pass_context
+def main(ctx):
+    config_path = '/etc/ngs_pipeline_config.json'
+    with open(config_path, 'r') as f:
+        config = json.loads(f.read())
+
+    ctx.ensure_object(dict)
+    ctx.obj['config'] = config
+
+@main.command()
+@click.pass_context
+def init(ctx):
+    config = ctx.obj['config']
+
+    auth = couch.BasicAuth(config['couchdb_user'], config['couchdb_psw'])
+    server = couch.Server('localhost', port=8001, auth=auth)
+    app_db = server.create_db('ngs_app')
+    app_db = server.get_db('ngs_app')
+
+    init_doc = {"_id":"sequencer_runs", 
+            "run_names": [],
             }
 
-    else:
-        config_path = '/etc/ngs_pipeline_config.json'
-        with open(config_path, 'r') as f:
-            config = json.loads(f.read())
+    res = app_db.put(init_doc)
 
+@main.command()
+@click.pass_context
+def run(ctx):
+    config = ctx.obj['config']
     app = create_app(config)
     app.run(host='0.0.0.0', port=8000, debug=True)
+
+
+
+
+if __name__ == '__main__':
+    main()
