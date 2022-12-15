@@ -62,6 +62,16 @@ def test_create_document(app_db):
     assert res == init_doc
 
 
+def test_create_document(app_db):
+    init_doc = {"_id":"sequencer_runs", 
+            "run_names": [],
+            }
+
+    res = app_db.put(init_doc)
+
+    #_start_pipeline(app_db)
+    res = app_db.get('sequencer_runs')
+    assert res == init_doc
 
 '''
 def test_poll_sequencer_output(app_db, app):

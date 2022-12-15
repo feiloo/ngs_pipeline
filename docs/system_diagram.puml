@@ -27,8 +27,8 @@ storage "PAT NAS"
 
 "webapp pipeline control" --> "PAT NAS" : "scrape metadata"
 
-"webapp pipeline control" --> "miniwdl pipeline": start
-"webapp pipeline control" --> "miniwdl pipeline": stop
+"webapp pipeline control" --> "miniwdl pipeline": "start"
+"webapp pipeline control" --> "miniwdl pipeline": "stop"
 
 "miniwdl pipeline" --> "PAT NAS": "save files"
 
@@ -39,10 +39,10 @@ usecase "custom ngs pipeline"
 "annotate cases" -- "webapp pipeline control"
 "custom ngs pipeline" -- "webapp pipeline control"
 
-"miniwdl pipeline" --> "clc workflow" : calls
-"miniwdl pipeline" <-- "clc workflow" : results
+"miniwdl pipeline" --> "clc workflow" : "calls"
+"miniwdl pipeline" <-- "clc workflow" : "results"
 
-couchdb --> "PAT NAS" : "references files"
+"couchdb" --> "PAT NAS" : "references files"
 
 node "sequencer"
 "sequencer" --> "PAT NAS" : "saves files"
