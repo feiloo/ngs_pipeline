@@ -26,6 +26,8 @@ from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.tasks import mq, start_pipeline
 
+import celery
+
 PIPELINE_VERSION = '0.0.1'
 UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'xlsx'}
@@ -61,19 +63,29 @@ new_sequencer_output = [{
 def _get_pipeline_dashboard_html():
     #progress = _fetch_workflow_progress()
     progress = 0
-    inputs = str(get_db(current_app).get('sequencer_runs')['run_names'])
+    #inputs = str(get_db(current_app).queryu('sequencer_runs')['run_names'])
+    pipeline_runs = list(get_db(current_app).query('pipeline_runs/all'))
+    p = [x['key'] for x in pipeline_runs]
+    if len(pipeline_runs) == 0:
+        inputs = 'ok'
+    else:
+        #inputs = pipeline_runs[0]['key']['input_samples']
+        inputs = pipeline_runs[0]['key']['logs']
+        #inputs = [Path(x).name for x in inputs]
+
     return render_template('pipeline_dashboard.html', 
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status='running',
             pipeline_input=inputs,
+            pipeline_runs=p
             )
 
 
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():
     current_app.logger.info('start pipeline')
-    start_pipeline(get_db_url(current_app), current_app.config)
+    start_pipeline.apply_async([get_db_url(current_app), dict(current_app.config['data'])])
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_stop", methods=['POST'])
@@ -131,12 +143,14 @@ def create_app(config):
 def main(ctx, dev):
     if dev == True:
         config = {"couchdb_user":'testuser','couchdb_psw':'testpsw',
-                'miseq_output_folder':'/data/private_testdata/miseq_output_testdata'
+                'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
+                "dev":True
                 }
     else:
         config_path = '/etc/ngs_pipeline_config.json'
         with open(config_path, 'r') as f:
             config = json.loads(f.read())
+            config['dev'] = False
 
     ctx.ensure_object(dict)
     ctx.obj['config'] = config

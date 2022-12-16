@@ -36,6 +36,13 @@
     <button type="submit" value="stop">Stop</button>
    </form>
   </div>
+  <div>
+    <ul>
+    {% for run in pipeline_runs %}
+    <li><textarea readonly>{{ run['logs']['stdout'] }}</textarea></li>
+    {% endfor %}
+    </ul>
+  </div>
  </div>
 
 
