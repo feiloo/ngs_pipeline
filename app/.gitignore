@@ -2,3 +2,4 @@ build
 wheels
 .venv
 __pycache__
+celerybeat-schedule

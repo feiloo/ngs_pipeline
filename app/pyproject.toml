@@ -16,7 +16,7 @@ dependencies = [
 "click",
 "pandas",
 "pydantic",
-"miniwdl @ git+https://github.com/feiloo/miniwdl.git",
+"miniwdl @ git+https://github.com/chanzuckerberg/miniwdl.git",
 ]
 
 [tool.pytest.ini_options]
