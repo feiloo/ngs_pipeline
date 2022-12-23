@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build -t clc_client .
+podman build -t clc_client .
