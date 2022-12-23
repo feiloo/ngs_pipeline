@@ -32,33 +32,8 @@ PIPELINE_VERSION = '0.0.1'
 UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'xlsx'}
 
-def polling():
-    # this just submits polling background tasks to celery
-    pass
-
 admin = Blueprint('admin', __name__, url_prefix='/')
 
-'''
-document_types:
-    - pipeline_run
-    - sequencer_run
-    - patient_result
-    - study_reference
-new_sequencer_output = [{
-    "_id": "aca32811be1156e2999434c5e9008294",
-    "_rev": "1-18128c3e411e8a02f569645acb150ae5",
-    "document_type": "sequencer_run",
-    "original_path": "/data/private_testdata/miseq_output_testdata/220101_M00000_0000_000000000-AAAAA",
-    "name_dirty": "False",
-    "parsed": {
-	"date": "220101",
-	"device": "M00000",
-	"run_number": "0000",
-	"flowcell_barcode": "000000000-AAAAA"
-    },
-    "indexed_time": "2022-11-24 14:03:12.625796"
-}]
-'''
 
 def _get_pipeline_dashboard_html():
     #progress = _fetch_workflow_progress()
@@ -66,18 +41,11 @@ def _get_pipeline_dashboard_html():
     #inputs = str(get_db(current_app).queryu('sequencer_runs')['run_names'])
     pipeline_runs = list(get_db(current_app).query('pipeline_runs/all'))
     p = [x['key'] for x in pipeline_runs]
-    if len(pipeline_runs) == 0:
-        inputs = 'ok'
-    else:
-        #inputs = pipeline_runs[0]['key']['input_samples']
-        inputs = pipeline_runs[0]['key']['logs']
-        #inputs = [Path(x).name for x in inputs]
 
     return render_template('pipeline_dashboard.html', 
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status='running',
-            pipeline_input=inputs,
             pipeline_runs=p
             )
 
@@ -85,12 +53,12 @@ def _get_pipeline_dashboard_html():
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():
     current_app.logger.info('start pipeline')
-    start_pipeline.apply_async([get_db_url(current_app), dict(current_app.config['data'])])
+    start_pipeline.apply_async(args=(dict(current_app.config['data']),))
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_stop", methods=['POST'])
 def stop_pipeline():
-    app.logger.info('stop pipeline')
+    current_app.logger.info('stop pipeline')
     #app_db = get_db(current_app)
     #_stop_pipeline(app_db)
     return redirect('/pipeline_status')
@@ -142,18 +110,20 @@ def create_app(config):
 @click.pass_context
 def main(ctx, dev):
     if dev == True:
-        config = {"couchdb_user":'testuser','couchdb_psw':'testpsw',
+        config = {
+                "couchdb_user":'testuser',
+                'couchdb_psw':'testpsw',
                 'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
-                "dev":True
+                "dev":'true'
                 }
     else:
         config_path = '/etc/ngs_pipeline_config.json'
         with open(config_path, 'r') as f:
             config = json.loads(f.read())
-            config['dev'] = False
 
     ctx.ensure_object(dict)
     ctx.obj['config'] = config
+
 
 @main.command()
 @click.pass_context
@@ -170,11 +140,6 @@ def init(ctx):
     server.create('ngs_app')
     app_db = server.database('ngs_app')
 
-    init_doc = {"_id":"sequencer_runs", 
-            "run_names": [],
-            }
-
-    res = app_db.save(init_doc)
     print(res)
 
     sequencer_map_fn = '''

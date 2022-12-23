@@ -17,6 +17,8 @@ testconfig = {'couchdb_user':'testuser',
         'couchdb_psw':'testpsw',
         'rabbitmq_user':'testuser',
         'rabbitmq_psw':'testpsw',
+        'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
+        "dev":'true'
         }
 
 config = testconfig
@@ -38,31 +40,16 @@ def get_db(url):
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     # Calls test('hello') every 10 seconds.
-    sender.add_periodic_task(10.0, test.s('hello'), name='add every 10')
+    sig = start_pipeline.signature(args=(config,))
+    sender.add_periodic_task(300.0, sig, name='start pipeline every 300s')
 
-    # Calls test('world') every 30 seconds
-    sender.add_periodic_task(30.0, test.s('world'), expires=10)
-
-    # Executes every Monday morning at 7:30 a.m.
+    # Executes every day at midnight
+    '''
     sender.add_periodic_task(
-        crontab(hour=7, minute=30, day_of_week=1),
+        crontab(hour=0, minute=0, day_of_week='*'),
         test.s('Happy Mondays!'),
     )
-
-
-@mq.task
-def run_workflow(workflow, inputs):
-    app_db = get_db(current_app)
-    doc = {
-            '_id': 'pipeline_state',
-            'document_type':'ngs_pipeline_run',
-            'progress': 0,
-            'finish_time':str(datetime.now())
-            }
-    #app_db.save(doc)
-    result = hello.delay(4,5)
-    print(result.get(timeout=10))
-
+    '''
 
 @mq.task
 def poll_sequencer_output(app_db, config):
@@ -95,19 +82,28 @@ def poll_filemaker_data():
     # poll recent filemaker data
     pass
 
+def get_db_url(config):
+    user = config['couchdb_user']
+    psw = config['couchdb_psw']
+    host = 'localhost'
+    port = 8001
+    url = f"http://{user}:{psw}@{host}:{port}"
+    return url
+
 @mq.task
-def start_pipeline(db_url, config):
-    #db_url = kwargs['db']
-    #config = kwargs['config']
-    app_db = get_db(db_url)
+def start_pipeline(config):
+    app_db = get_db(get_db_url(config))
 
     poll_sequencer_output(app_db, config)
     #poll_filemaker_data()
     miseq_output_folder = config['miseq_output_folder']
     db_runs = app_db.query('sequencer_runs/all')
-    known_runs = set()#[str(Path(r['key']['original_path']).name) for r in db_runs])
+    known_runs = set()#set([str(Path(r['key']['original_path']).name) for r in db_runs])
     miseq_runs = set([str(Path(r).name) for r in Path(miseq_output_folder).iterdir()])
     new_runs = miseq_runs - known_runs
+
+    if len(new_runs) == 0:
+        return
 
     workflow_inputs = []
     
@@ -115,11 +111,14 @@ def start_pipeline(db_url, config):
         for sample_path in (Path(miseq_output_folder) / new_run).rglob('*.fastq.gz'):
             workflow_inputs.append(sample_path)
 
+    workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
+
     pipeline_run = {
             'document_type':'pipeline_run',
             'created_time':str(datetime.now()),
             'input_samples': [str(x) for x in workflow_inputs],
-            'finished': 'false',
+            'workflow': workflow,
+            'status': 'running',
             'logs': {
                 'stderr': [],
                 'stdout': [],
@@ -128,7 +127,6 @@ def start_pipeline(db_url, config):
     pipeline_run = app_db.save(pipeline_run)
 
     #workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
-    workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
     output_dir = '/data/fhoelsch/wdl_out'
 
     # we write to tempfile, even though there is an output log file in the wdl output directory, 
@@ -159,22 +157,9 @@ def start_pipeline(db_url, config):
             stdo.seek(0)
             pipeline_run['logs']['stderr'] = stde.read().decode('utf-8')
             pipeline_run['logs']['stdout'] = stdo.read().decode('utf-8')
+            retcode = proc.returncode
+            if retcode == 0:
+                pipeline_run['status'] = 'successful'
+            else:
+                pipeline_run['status'] = 'error'
             pipeline_run = app_db.save(pipeline_run)
-
-    '''
-    for run in new_runs:
-        run_path = os.path.join(miseq_output_folder, run)
-        for f in os.listdir(run_path):
-            parsed = parse_fastq_name(f)
-    '''
-    '''
-        samplesheet_path = os.path.join(run_path, 'SampleSheet.csv')
-        run_molnumbers = []
-    #    samplesheet_path = os.path.join(miseq_output_folder, run, 'SampleSheet.csv')
-    #    run_table = read_samplesheet(samplesheet_path)
-
-    #collect_case_numbers()
-    #poll_filemaker_data()
-    '''
-
-

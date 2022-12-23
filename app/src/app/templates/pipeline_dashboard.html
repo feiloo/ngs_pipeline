@@ -4,6 +4,8 @@
 <style>
 </style>
 
+<!-- <meta http-equiv="refresh" content="60; URL=https://example.com/"> -->
+
 <title>Ngs Pipeline Dashboard</title>
 </head>
 
@@ -12,12 +14,6 @@
 
  <div>
   Pipeline Version: {{ pipeline_version }}
- </div>
- <div>
-  Pipeline Input: 
- <div>
-  {{ pipeline_input }}
- </div>
  </div>
 
  <div>
@@ -37,9 +33,14 @@
    </form>
   </div>
   <div>
+    <h2> Pipeline Runs </h2>
     <ul>
     {% for run in pipeline_runs %}
-    <li><textarea readonly>{{ run['logs']['stdout'] }}</textarea></li>
+    <li>
+	    <h2>{{ run['created_time'] }}</h2>
+	    <textarea readonly>{{ run['input_samples'] }}</textarea>
+	    <textarea readonly>{{ run['logs']['stdout'] }}</textarea>
+    </li>
     {% endfor %}
     </ul>
   </div>

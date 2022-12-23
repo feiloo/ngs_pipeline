@@ -1,6 +1,8 @@
 import datetime
-
+from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel
+from pathlib import Path
 
 runformat: ['miseq_0', 'only_fastq']
 
@@ -14,10 +16,31 @@ document_types:
 '''
 
 class BaseDocument(BaseModel):
+    _id: Optional[str]
+    _rev: Optional[str]
     data_model_version: str
     document_type: str
     #pipeline_version: str
     #workflow_version: str
+
+class PipelineRun(BaseDocument):
+    document_type: str = 'pipeline_run'
+    created_time: datetime
+    input_samples: [Path]
+    status: str
+    logs: PipelineLogs
+
+
+class PipelineLogs(BaseModel):
+    stdout: str
+    stderr: str
+
+class SequencerRun(BaseDocument):
+    document_type: str = 'sequencer_run'
+    original_path: Path
+    name_dirty: bool
+    parsed: dict
+    indexed_time: datetime
 
 
 class MolYearNumber(BaseModel):
