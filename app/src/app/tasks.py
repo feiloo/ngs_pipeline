@@ -112,13 +112,16 @@ def start_pipeline(config):
     if len(new_runs) == 0:
         return
 
+    workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
+    #workflow = '/data/ngs_pipeline/workflow/wdl/clc_test.wdl'
+    #workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
+
     workflow_inputs = []
     
     for new_run in new_runs:
         for sample_path in (Path(miseq_output_folder) / new_run).rglob('*.fastq.gz'):
             workflow_inputs.append(sample_path)
 
-    workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
 
     pipeline_run = {
             'document_type':'pipeline_run',
@@ -133,7 +136,6 @@ def start_pipeline(config):
             }
     pipeline_run = app_db.save(pipeline_run)
 
-    #workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
     output_dir = '/data/fhoelsch/wdl_out'
 
     # we write to tempfile, even though there is an output log file in the wdl output directory, 
@@ -142,8 +144,20 @@ def start_pipeline(config):
 
     with tempfile.TemporaryFile() as stde:
         with tempfile.TemporaryFile() as stdo:
+            clc_host = config['clc_host']
+            clc_user = config['clc_user']
+            clc_psw = config['clc_psw']
+
+            cmd = ['miniwdl', 'run', 
+                    '--env', f'CLC_HOST={clc_host}', 
+                    '--env', f"CLC_USER={clc_user}", 
+                    '--env', f'CLC_PSW={clc_psw}', 
+                    '--dir', output_dir, 
+                    workflow
+                    ] + [f'files={i}' for i in workflow_inputs]
+
             pipeline_proc = subprocess.Popen(
-                    ['miniwdl', 'run', '--env', 'CLC_HOST=$CLC_HOST', '--env', "CLC_USER=$CLC_USER", '--env', 'CLC_PSW=$CLC_PSW', '--dir', output_dir, workflow] + [f'files={i}' for i in workflow_inputs],
+                    cmd,
                     stdout=stde, #subprocess.PIPE, 
                     stderr=stdo, #subprocess.PIPE
                     #capture_output=True
@@ -164,7 +178,7 @@ def start_pipeline(config):
             stdo.seek(0)
             pipeline_run['logs']['stderr'] = stde.read().decode('utf-8')
             pipeline_run['logs']['stdout'] = stdo.read().decode('utf-8')
-            retcode = proc.returncode
+            retcode = pipeline_proc.returncode
             if retcode == 0:
                 pipeline_run['status'] = 'successful'
             else:

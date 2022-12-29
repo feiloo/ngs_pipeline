@@ -43,7 +43,7 @@ def _get_pipeline_dashboard_html():
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status='running',
-            pipeline_runs=p
+            pipeline_runs=reversed(sorted(p, key=lambda x: datetime.fromisoformat(x['created_time'])))
             )
 
 
@@ -84,51 +84,7 @@ def get_db(app):
 
     return g.app_db
 
-def create_app(config):
-    app = Flask(__name__)
-    app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
-    app.config['data'] = config
-
-    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
-    app.register_blueprint(admin)
-
-    return app
-
-
-@click.group()
-@click.option('--dev', is_flag=True, default=False)
-@click.option('--config', 
-        type=click.Path(exists=True, dir_okay=False, path_type=Path), 
-        default=Path('/etc/ngs_pipeline_config.json')
-        )
-@click.pass_context
-def main(ctx, dev, config):
-    if dev == True
-        loaded_config = testconfig
-    else:
-        with config.open('r') as f:
-            loaded_config = json.loads(f.read())
-
-    ctx.ensure_object(dict)
-    ctx.obj['config'] = loaded_config
-
-
-@main.command()
-@click.pass_context
-def init(ctx):
-    config = ctx.obj['config']
-
-    user = config['couchdb_user']
-    psw = config['couchdb_psw']
-    host = config['couchdb_host']
-    port = 8001
-    url = f"http://{user}:{psw}@{host}:{port}"
-
-    server = couch.Server(url)
-    server.create('ngs_app')
-    app_db = server.database('ngs_app')
-
+def setup_views(app_db):
     sequencer_map_fn = '''
     function (doc) {
       if(doc.document_type == 'sequencer_run')
@@ -175,6 +131,52 @@ def init(ctx):
                 }
         })
 
+def create_app(config):
+    app = Flask(__name__)
+    app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+    app.config['data'] = config
+
+    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
+    app.register_blueprint(admin)
+
+    return app
+
+
+@click.group()
+@click.option('--dev', is_flag=True, default=False)
+@click.option('--config', 
+        type=click.Path(exists=True, dir_okay=False, path_type=Path), 
+        default=Path('/etc/ngs_pipeline_config.json')
+        )
+@click.pass_context
+def main(ctx, dev, config):
+    if dev == True:
+        loaded_config = testconfig
+    else:
+        with config.open('r') as f:
+            loaded_config = json.loads(f.read())
+
+    ctx.ensure_object(dict)
+    ctx.obj['config'] = loaded_config
+
+
+
+@main.command()
+@click.pass_context
+def init(ctx):
+    config = ctx.obj['config']
+
+    user = config['couchdb_user']
+    psw = config['couchdb_psw']
+    host = config['couchdb_host']
+    port = 8001
+    url = f"http://{user}:{psw}@{host}:{port}"
+
+    server = couch.Server(url)
+    server.create('ngs_app')
+    app_db = server.database('ngs_app')
+    setup_views(app_db)
 
 
 @main.command()

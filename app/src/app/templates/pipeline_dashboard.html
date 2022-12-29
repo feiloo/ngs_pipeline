@@ -2,6 +2,17 @@
 <html>
 <head>
 <style>
+table, td, th {
+	border: 1px solid black;
+}
+table {
+	width: 80%;
+	border-collapse: collapse;
+}
+td {
+	text-align: center;
+	max-width:600px;
+}
 </style>
 
 <!-- <meta http-equiv="refresh" content="60; URL=https://example.com/"> -->
@@ -34,15 +45,39 @@
   </div>
   <div>
     <h2> Pipeline Runs </h2>
-    <ul>
+
+    <table> 
+    <tr>
+    <th>created time</th>
+    <th>status</th>
+    <th>inputs</th>
+    <th>stdout</th>
+    </tr>
     {% for run in pipeline_runs %}
-    <li>
-	    <h2>{{ run['created_time'] }}</h2>
-	    <textarea readonly>{{ run['input_samples'] }}</textarea>
-	    <textarea readonly>{{ run['logs']['stdout'] }}</textarea>
-    </li>
+    <tr>
+	    <td><nobr><data>{{ run['created_time'] }}<data></td>
+	    <td>{{ run['status'] }}</td>
+
+	    <!-- <span>inputs: <textarea readonly>{{ run['input_samples'] }}</textarea></span>
+	    <textarea readonly>{{ run['logs']['stdout'] }}</textarea> -->
+
+	    <td>
+		    <div style="overflow:scroll;height:200px;width:">
+		    {% for l in run['input_samples'] %}
+		    <nobr>{{l}}<br>
+	    	    {% endfor %}
+		    </div>
+	    </td>
+	    <td>
+		    <div style="overflow:scroll;height:200px;width:">
+		    {% for l in run['logs']['stdout'].split('\n') %}
+		    <nobr>{{l}}<br>
+	    	    {% endfor %}
+		    </div>
+	    </td>
+    </tr>
     {% endfor %}
-    </ul>
+    </table>
   </div>
  </div>
 
