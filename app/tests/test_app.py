@@ -1,21 +1,71 @@
-import couch.couch as couch
-from app.app import _start_pipeline, create_app, get_db
+import pycouchdb as couch
+from app.app import create_app, get_db, testconfig, init
 from time import sleep
 import pytest
 
-@pytest.fixture()
+import subprocess
+import time
+
+from app.tasks import get_celery_config, start_pipeline
+
+from click.testing import CliRunner
+
+podman_args = [ 'podman', 'run', '-d', '--rm' ]
+@pytest.fixture(scope='session')
 def config():
-    testconfig = {"couchdb_user":'testuser','couchdb_psw':'testpsw',
-            'miseq_output_folder':'/data/private_testdata/miseq_output_testdata'
-            }
     return testconfig
 
+@pytest.fixture(scope='session')
+def couchdb_server(config):
+    args = podman_args + [
+        '--name=test_couchdb', 
+        '-e', 'COUCHDB_USER=testuser', 
+        '-e', 'COUCHDB_PASSWORD=testpsw', 
+        '-p', '8001:5984', 
+        'docker.io/apache/couchdb'
+        ]
+    proc = subprocess.run(args)
+    # sleep enough until couchdb is online
+    time.sleep(3)
+
+    user = 'testuser'
+    psw = 'testpsw'
+    host = 'localhost'
+    port = 8001
+    url = f"http://{user}:{psw}@{host}:{port}"
+
+    server = couch.Server(url)
+    yield server
+    args = [ 'podman', 'stop', 'test_couchdb' ]
+    subprocess.run(args)
+    time.sleep(3)
+
+
 @pytest.fixture()
-def db(config):
-    auth = couch.BasicAuth(config['couchdb_user'], config['couchdb_psw'])
-    server = couch.Server('localhost', port=8001, auth=auth)
-    app_db = server.create_db('ngs_app')
-    return app_db
+def rabbitmq_server(config):
+    args = podman_args + [
+        '--name=test_rabbitmq', 
+	'-p', '5672:5672',
+	'--hostname', 'my-rabbit',
+	'-e', 'RABBITMQ_DEFAULT_USER=testuser',
+	'-e', 'RABBITMQ_DEFAULT_PASS=testpsw',
+	'docker.io/rabbitmq:3-management'
+        ]
+
+    proc = subprocess.run(args)
+    # sleep enough until rabbitmq is online
+    time.sleep(3)
+    yield proc
+    args = [ 'podman', 'stop', 'test_rabbitmq' ]
+    subprocess.run(args)
+    time.sleep(3)
+
+
+@pytest.fixture()
+def db(config, couchdb_server):
+    app_db = couchdb_server.create('ngs_app')
+    yield app_db
+    couchdb_server.delete('ngs_app')
 
 
 @pytest.fixture()
@@ -30,12 +80,12 @@ def app(db, config):
 
 @pytest.fixture()
 def client(app):
-        return app.test_client()
+    return app.test_client()
 
 
 @pytest.fixture()
 def runner(app):
-        return app.test_cli_runner()
+    return app.test_cli_runner()
 
 
 @pytest.fixture()
@@ -44,34 +94,38 @@ def app_db(app):
         return get_db(app)
 
 
-'''
-def test_request_example(client):
-    response = client.get("/pipeline_status")
-'''
+@pytest.fixture(scope='session')
+def celery_config(config):
+    return get_celery_config(config)
+
+@pytest.mark.skip()
+def test_start_pipeline():
+    start_pipeline.apply_async(args=(dict(current_app.config['data']),))
 
 
-def test_create_document(app_db):
+@pytest.mark.skip()
+@pytest.mark.celery()
+def test_create_task(celery_app, celery_worker):
+    pass
+
+def test_create_document(db):
     init_doc = {"_id":"sequencer_runs", 
             "run_names": [],
             }
 
-    res = app_db.put(init_doc)
+    print(db)
+    db.save(init_doc)
 
     #_start_pipeline(app_db)
-    res = app_db.get('sequencer_runs')
+    res = db.get('sequencer_runs')
+    res.pop('_rev')
     assert res == init_doc
 
 
-def test_create_document(app_db):
-    init_doc = {"_id":"sequencer_runs", 
-            "run_names": [],
-            }
 
-    res = app_db.put(init_doc)
-
-    #_start_pipeline(app_db)
-    res = app_db.get('sequencer_runs')
-    assert res == init_doc
+def test_db_init(db):
+    runner = CliRunner()
+    result = runner.invoke(init, ['--init'])
 
 '''
 def test_poll_sequencer_output(app_db, app):
