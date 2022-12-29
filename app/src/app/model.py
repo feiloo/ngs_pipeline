@@ -20,8 +20,6 @@ class BaseDocument(BaseModel):
     _rev: Optional[str]
     data_model_version: str
     document_type: str
-    #pipeline_version: str
-    #workflow_version: str
 
 class PipelineRun(BaseDocument):
     document_type: str = 'pipeline_run'
@@ -41,6 +39,8 @@ class SequencerRun(BaseDocument):
     name_dirty: bool
     parsed: dict
     indexed_time: datetime
+
+
 
 
 class MolYearNumber(BaseModel):

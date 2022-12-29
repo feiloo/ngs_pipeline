@@ -13,7 +13,9 @@ import time
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 
-testconfig = {'couchdb_user':'testuser',
+# this will be overwritten by the proper config in the app
+testconfig = {
+        'couchdb_user':'testuser',
         'couchdb_psw':'testpsw',
         'rabbitmq_user':'testuser',
         'rabbitmq_psw':'testpsw',
@@ -21,13 +23,18 @@ testconfig = {'couchdb_user':'testuser',
         "dev":'true'
         }
 
-config = testconfig
 
-backend_url = f'couchdb://{config["couchdb_user"]}:{config["couchdb_psw"]}@localhost:8001/pipeline_results' 
-broker_url = f'pyamqp://{config["rabbitmq_user"]}:{config["rabbitmq_psw"]}@localhost//'
+def get_celery_config(config):
+    celery_config = { 
+      'backend_url': f'couchdb://{config["couchdb_user"]}:{config["couchdb_psw"]}@localhost:8001/pipeline_results',
+      'broker_url': f'pyamqp://{config["rabbitmq_user"]}:{config["rabbitmq_psw"]}@localhost//'
+    }
+    return celery_config
+
+celery_config = get_celery_config(testconfig)
+
 mq = Celery('ngs_pipeline', 
-        backend=backend_url,
-        broker=broker_url
+        **celery_config
         )
 
 
@@ -136,7 +143,7 @@ def start_pipeline(config):
     with tempfile.TemporaryFile() as stde:
         with tempfile.TemporaryFile() as stdo:
             pipeline_proc = subprocess.Popen(
-                    ['miniwdl', 'run', '--dir', output_dir, workflow] + [f'files={i}' for i in workflow_inputs],
+                    ['miniwdl', 'run', '--env', 'CLC_HOST=$CLC_HOST', '--env', "CLC_USER=$CLC_USER", '--env', 'CLC_PSW=$CLC_PSW', '--dir', output_dir, workflow] + [f'files={i}' for i in workflow_inputs],
                     stdout=stde, #subprocess.PIPE, 
                     stderr=stdo, #subprocess.PIPE
                     #capture_output=True

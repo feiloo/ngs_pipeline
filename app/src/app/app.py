@@ -1,44 +1,41 @@
-import os
-from flask import Flask, render_template, flash, request, redirect, url_for, g, current_app, Blueprint
-from werkzeug.utils import secure_filename
-from math import ceil
 from datetime import datetime
 import json
 from pathlib import Path
-import multiprocessing
-
 import logging
 
-import threading
-
-import pandas as pd
-from itertools import groupby
-import pickle
+import requests
 import click
 
-import requests
-
-#import couch.couch as couch
 import pycouchdb as couch
+
+from flask import Flask, render_template, flash, request, redirect, url_for, g, current_app, Blueprint
+from werkzeug.utils import secure_filename
 
 from app.constants import *
 from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
-from app.tasks import mq, start_pipeline
-
-import celery
+from app.tasks import mq, start_pipeline, get_celery_config
 
 PIPELINE_VERSION = '0.0.1'
 UPLOAD_FOLDER = '/tmp/uploads'
-ALLOWED_EXTENSIONS = {'xlsx'}
 
 admin = Blueprint('admin', __name__, url_prefix='/')
 
+testconfig = {
+        'couchdb_host': 'localhost',
+        "couchdb_user":'testuser',
+        'couchdb_psw':'testpsw',
+        'clc_host': 'localhost',
+        'clc_user': 'testuser',
+        'clc_psw': 'testpsw',
+        'rabbitmq_user':'testuser',
+        'rabbitmq_psw':'testpsw',
+        'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
+        "dev":'true'
+        }
 
 def _get_pipeline_dashboard_html():
-    #progress = _fetch_workflow_progress()
     progress = 0
-    #inputs = str(get_db(current_app).queryu('sequencer_runs')['run_names'])
     pipeline_runs = list(get_db(current_app).query('pipeline_runs/all'))
     p = [x['key'] for x in pipeline_runs]
 
@@ -59,7 +56,6 @@ def pipeline_start():
 @admin.route("/pipeline_stop", methods=['POST'])
 def stop_pipeline():
     current_app.logger.info('stop pipeline')
-    #app_db = get_db(current_app)
     #_stop_pipeline(app_db)
     return redirect('/pipeline_status')
 
@@ -69,9 +65,9 @@ def pipeline_status():
     return _get_pipeline_dashboard_html()
 
 def get_db_url(app):
+    host = app.config['data']['couchdb_host']
     user = app.config['data']['couchdb_user']
     psw = app.config['data']['couchdb_psw']
-    host = 'localhost'
     port = 8001
     url = f"http://{user}:{psw}@{host}:{port}"
     return url
@@ -88,11 +84,6 @@ def get_db(app):
 
     return g.app_db
 
-
-def close_db(e=None):
-    db = g.pop('app_db', None)
-
-
 def create_app(config):
     app = Flask(__name__)
     app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
@@ -107,22 +98,20 @@ def create_app(config):
 
 @click.group()
 @click.option('--dev', is_flag=True, default=False)
+@click.option('--config', 
+        type=click.Path(exists=True, dir_okay=False, path_type=Path), 
+        default=Path('/etc/ngs_pipeline_config.json')
+        )
 @click.pass_context
-def main(ctx, dev):
-    if dev == True:
-        config = {
-                "couchdb_user":'testuser',
-                'couchdb_psw':'testpsw',
-                'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
-                "dev":'true'
-                }
+def main(ctx, dev, config):
+    if dev == True
+        loaded_config = testconfig
     else:
-        config_path = '/etc/ngs_pipeline_config.json'
-        with open(config_path, 'r') as f:
-            config = json.loads(f.read())
+        with config.open('r') as f:
+            loaded_config = json.loads(f.read())
 
     ctx.ensure_object(dict)
-    ctx.obj['config'] = config
+    ctx.obj['config'] = loaded_config
 
 
 @main.command()
@@ -132,15 +121,13 @@ def init(ctx):
 
     user = config['couchdb_user']
     psw = config['couchdb_psw']
-    host = 'localhost'
+    host = config['couchdb_host']
     port = 8001
     url = f"http://{user}:{psw}@{host}:{port}"
 
     server = couch.Server(url)
     server.create('ngs_app')
     app_db = server.database('ngs_app')
-
-    print(res)
 
     sequencer_map_fn = '''
     function (doc) {
@@ -188,6 +175,8 @@ def init(ctx):
                 }
         })
 
+
+
 @main.command()
 @click.pass_context
 def run(ctx):
@@ -200,6 +189,7 @@ def run(ctx):
 @click.pass_context
 def worker(ctx):
     config = ctx.obj['config']
+    mq.conf.update(get_celery_config(config))
     worker = mq.Worker(
             include=['app.app'],
 	    loglevel=logging.DEBUG,
@@ -209,8 +199,9 @@ def worker(ctx):
 @main.command()
 @click.pass_context
 def beat(ctx):
-    from  celery.apps.beat import Beat
+    from celery.apps.beat import Beat
     config = ctx.obj['config']
+    mq.conf.update(get_celery_config(config))
     b = Beat(app=mq,
 	    loglevel=logging.DEBUG,
             )
