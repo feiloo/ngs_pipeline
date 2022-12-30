@@ -6,12 +6,12 @@ import subprocess
 import json
 import tempfile
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
-import time
-
 from app.parsers import parse_fastq_name, parse_miseq_run_name
+from app.model import SequencerRun, PipelineRun
 
 # this will be overwritten by the proper config in the app
 testconfig = {
@@ -77,13 +77,14 @@ def poll_sequencer_output(app_db, config):
         # we save the parsed information too, so we can efficiently query the runs
         run_document = {
                 'document_type':'sequencer_run',
-                'original_path':str(run_name), 
+                'original_path':Path(run_name), 
                 'name_dirty':str(dirty), 
                 'parsed':parsed, 
-                'indexed_time':str(datetime.now())
+                'indexed_time':datetime.now()
                 }
+        sequencer_run = SequencerRun(**run_document)
         #runs.append(run_document)
-        app_db.save(run_document)
+        app_db.save(sequencer_run.dict())
 
 def poll_filemaker_data():
     # poll recent filemaker data
@@ -93,7 +94,7 @@ def get_db_url(config):
     user = config['couchdb_user']
     psw = config['couchdb_psw']
     host = 'localhost'
-    port = 8001
+    port = 5984
     url = f"http://{user}:{psw}@{host}:{port}"
     return url
 
@@ -123,7 +124,7 @@ def start_pipeline(config):
             workflow_inputs.append(sample_path)
 
 
-    pipeline_run = {
+    pipeline_document = {
             'document_type':'pipeline_run',
             'created_time':str(datetime.now()),
             'input_samples': [str(x) for x in workflow_inputs],
@@ -134,7 +135,8 @@ def start_pipeline(config):
                 'stdout': [],
                 }
             }
-    pipeline_run = app_db.save(pipeline_run)
+    pipeline_run = PipelineRun(**pipeline_document)
+    app_db.save(pipeline_run)
 
     output_dir = '/data/fhoelsch/wdl_out'
 
