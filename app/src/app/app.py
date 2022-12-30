@@ -39,11 +39,15 @@ def _get_pipeline_dashboard_html():
     pipeline_runs = list(get_db(current_app).query('pipeline_runs/all'))
     p = [x['key'] for x in pipeline_runs]
 
+    dn = datetime.now()
+    for pr in p:
+        pr['age'] = dn - datetime.fromisoformat(pr['created_time'])
+
     return render_template('pipeline_dashboard.html', 
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status='running',
-            pipeline_runs=reversed(sorted(p, key=lambda x: datetime.fromisoformat(x['created_time'])))
+            pipeline_runs=reversed(sorted(p, key=lambda x: datetime.fromisoformat(x['created_time']))),
             )
 
 

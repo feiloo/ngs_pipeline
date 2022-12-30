@@ -1,8 +1,8 @@
-import datetime
-from typing import Optional
+from typing import Optional, Literal, List
 from datetime import datetime
-from pydantic import BaseModel
 from pathlib import Path
+from pydantic import BaseModel
+import json
 
 runformat: ['miseq_0', 'only_fastq']
 
@@ -15,23 +15,55 @@ document_types:
     - study_reference
 '''
 
+DATA_MODEL_VERSION = '0.0.1'
+
+# based on the ordercodes of "NGS_Panel_Abdeckung_MolPath.docx"
+PanelType = Literal[
+        'unset', 
+        'NGS DNA Lungenpanel', 
+        'NGS oncoHS', 
+        'NGS BRCAness', 
+        'NGS RNA Sarkom', 
+        'NGS RNA Fusion Lunge', 
+        'NGS PanCancer'
+        ]
+
+
 class BaseDocument(BaseModel):
-    _id: Optional[str]
-    _rev: Optional[str]
-    data_model_version: str
+    id: Optional[str]
+    rev: Optional[str]
+    data_model_version: str = DATA_MODEL_VERSION
     document_type: str
 
-class PipelineRun(BaseDocument):
-    document_type: str = 'pipeline_run'
-    created_time: datetime
-    input_samples: [Path]
-    status: str
-    logs: PipelineLogs
+    def to_dict(self):
+        # convert to serializable dict
+        d = json.loads(self.json())
+        d.pop('id')
+        d.pop('rev')
+        if self.id is not None:
+            d['_id'] = self.id
+        if self.rev is not None:
+            d['_rev'] = self.rev
+        return d
 
+    def from_dict(self, d):
+        if '_id' in d:
+            d['id'] = d.pop('_id')
+        if '_rev' in d:
+            d['rev'] = d.pop('_rev')
+        m = type(self)(**d)
+        return m
 
 class PipelineLogs(BaseModel):
     stdout: str
     stderr: str
+
+class PipelineRun(BaseDocument):
+    document_type: str = 'pipeline_run'
+    created_time: datetime
+    input_samples: List[Path]
+    status: str
+    logs: PipelineLogs
 
 class SequencerRun(BaseDocument):
     document_type: str = 'sequencer_run'
@@ -39,8 +71,9 @@ class SequencerRun(BaseDocument):
     name_dirty: bool
     parsed: dict
     indexed_time: datetime
-
-
+    # a targeted sequencer run, is always related to a single type of diagnostic panel
+    # this is needed to later choose the right workflow
+    panel_type: PanelType
 
 
 class MolYearNumber(BaseModel):
@@ -65,7 +98,7 @@ class TrackingFormLine(BaseModel):
     aqua: float
 
 class TrackingForm(BaseModel):
-    date: datetime.datetime
+    date: datetime
     #lines: list[TrackingFormLine]
 
 
@@ -81,7 +114,7 @@ class Person(BaseModel):
 class Patient(Person):
     mp_nr: str
     examinations: list
-    birthdate: datetime.datetime
+    birthdate: datetime
     gender: str
 
 class Pathologist(Person):

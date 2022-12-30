@@ -7,6 +7,7 @@ import json
 import tempfile
 import logging
 import time
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -80,11 +81,12 @@ def poll_sequencer_output(app_db, config):
                 'original_path':Path(run_name), 
                 'name_dirty':str(dirty), 
                 'parsed':parsed, 
+                'panel_type': 'NGS DNA Lungenpanel', 
                 'indexed_time':datetime.now()
                 }
         sequencer_run = SequencerRun(**run_document)
         #runs.append(run_document)
-        app_db.save(sequencer_run.dict())
+        app_db.save(json.loads(sequencer_run.json()))
 
 def poll_filemaker_data():
     # poll recent filemaker data
@@ -131,58 +133,82 @@ def start_pipeline(config):
             'workflow': workflow,
             'status': 'running',
             'logs': {
-                'stderr': [],
-                'stdout': [],
+                'stderr': '',
+                'stdout': '',
                 }
             }
-    pipeline_run = PipelineRun(**pipeline_document)
-    app_db.save(pipeline_run)
 
-    output_dir = '/data/fhoelsch/wdl_out'
+    pipeline_run = PipelineRun(
+            created_time=datetime.now(),
+            input_samples=[str(x) for x in workflow_inputs],
+            workflow=workflow,
+            status='running',
+            logs={
+                'stderr': '',
+                'stdout': '',
+                }
+            )
 
-    # we write to tempfile, even though there is an output log file in the wdl output directory, 
-    # because elsewhere we dont know the run name
-    # this will be fixed in future, for example by naming the runs
+    def db_save(pipeline_run):
+        pr = app_db.save(pipeline_run.to_dict())
+        return pipeline_run.from_dict(pr)
+        
 
-    with tempfile.TemporaryFile() as stde:
-        with tempfile.TemporaryFile() as stdo:
-            clc_host = config['clc_host']
-            clc_user = config['clc_user']
-            clc_psw = config['clc_psw']
+    pipeline_run = db_save(pipeline_run)
 
-            cmd = ['miniwdl', 'run', 
-                    '--env', f'CLC_HOST={clc_host}', 
-                    '--env', f"CLC_USER={clc_user}", 
-                    '--env', f'CLC_PSW={clc_psw}', 
-                    '--dir', output_dir, 
-                    workflow
-                    ] + [f'files={i}' for i in workflow_inputs]
+    try:
+        output_dir = '/data/fhoelsch/wdl_out'
 
-            pipeline_proc = subprocess.Popen(
-                    cmd,
-                    stdout=stde, #subprocess.PIPE, 
-                    stderr=stdo, #subprocess.PIPE
-                    #capture_output=True
-                    )
+        # we write to tempfile, even though there is an output log file in the wdl output directory, 
+        # because elsewhere we dont know the run name
+        # this will be fixed in future, for example by naming the runs
 
-            # update db entry every second when the process runs
-            while pipeline_proc.poll() is None:
+        with tempfile.TemporaryFile() as stde:
+            with tempfile.TemporaryFile() as stdo:
+                clc_host = config['clc_host']
+                clc_user = config['clc_user']
+                clc_psw = config['clc_psw']
+
+                cmd = ['miniwdl', 'run', 
+                        '--env', f'CLC_HOST={clc_host}', 
+                        '--env', f"CLC_USER={clc_user}", 
+                        '--env', f'CLC_PSW={clc_psw}', 
+                        '--dir', output_dir, 
+                        workflow
+                        ] + [f'files={i}' for i in workflow_inputs]
+
+                pipeline_proc = subprocess.Popen(
+                        cmd,
+                        stdout=stde, #subprocess.PIPE, 
+                        stderr=stdo, #subprocess.PIPE
+                        #capture_output=True
+                        )
+
+                # update db entry every second when the process runs
+                while pipeline_proc.poll() is None:
+                    stde.seek(0)
+                    stdo.seek(0)
+                    pipeline_run.logs.stderr = stde.read().decode('utf-8')
+                    pipeline_run.logs.stdout = stdo.read().decode('utf-8')
+
+                    pipeline_run = db_save(pipeline_run)
+                    time.sleep(1)
+
+                # update db entry at the end
                 stde.seek(0)
                 stdo.seek(0)
-                pipeline_run['logs']['stderr'] = stde.read().decode('utf-8')
-                pipeline_run['logs']['stdout'] = stdo.read().decode('utf-8')
+                pipeline_run.logs.stderr = stde.read().decode('utf-8')
+                pipeline_run.logs.stdout = stdo.read().decode('utf-8')
 
-                pipeline_run = app_db.save(pipeline_run)
-                time.sleep(1)
+                retcode = pipeline_proc.returncode
+                if retcode == 0:
+                    pipeline_document.status = 'successful'
+                else:
+                    pipeline_document.status = 'error'
 
-            # update db entry at the end
-            stde.seek(0)
-            stdo.seek(0)
-            pipeline_run['logs']['stderr'] = stde.read().decode('utf-8')
-            pipeline_run['logs']['stdout'] = stdo.read().decode('utf-8')
-            retcode = pipeline_proc.returncode
-            if retcode == 0:
-                pipeline_run['status'] = 'successful'
-            else:
-                pipeline_run['status'] = 'error'
-            pipeline_run = app_db.save(pipeline_run)
+                pipeline_run = db_save(pipeline_run)
+
+    except Exception as e:
+        print(e)
+        pipeline_document['status'] = 'error'
+        pipeline_document = db_save(pipeline_document)
