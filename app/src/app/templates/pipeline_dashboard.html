@@ -49,6 +49,7 @@ td {
     <table> 
     <tr>
     <th>created time</th>
+    <th>age</th>
     <th>status</th>
     <th>inputs</th>
     <th>stdout</th>
@@ -56,6 +57,7 @@ td {
     {% for run in pipeline_runs %}
     <tr>
 	    <td><nobr><data>{{ run['created_time'] }}<data></td>
+	    <td><nobr><data>{{ run['age'] }}<data></td>
 	    <td>{{ run['status'] }}</td>
 
 	    <!-- <span>inputs: <textarea readonly>{{ run['input_samples'] }}</textarea></span>
