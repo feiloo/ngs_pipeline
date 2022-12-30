@@ -13,10 +13,12 @@ dependencies = [
 "pycouchdb",
 "celery",
 "pytest",
+"pyparsing",
 "click",
 "pandas",
 "pydantic",
 "miniwdl @ git+https://github.com/chanzuckerberg/miniwdl.git",
+"pytest-celery",
 ]
 
 [tool.pytest.ini_options]
