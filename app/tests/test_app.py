@@ -31,7 +31,7 @@ def couchdb_server(config):
     user = 'testuser'
     psw = 'testpsw'
     host = 'localhost'
-    port = 8001
+    port = 5984
     url = f"http://{user}:{psw}@{host}:{port}"
 
     server = couch.Server(url)

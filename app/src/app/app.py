@@ -68,7 +68,7 @@ def get_db_url(app):
     host = app.config['data']['couchdb_host']
     user = app.config['data']['couchdb_user']
     psw = app.config['data']['couchdb_psw']
-    port = 8001
+    port = 5984
     url = f"http://{user}:{psw}@{host}:{port}"
     return url
 
@@ -170,7 +170,7 @@ def init(ctx):
     user = config['couchdb_user']
     psw = config['couchdb_psw']
     host = config['couchdb_host']
-    port = 8001
+    port = 5984
     url = f"http://{user}:{psw}@{host}:{port}"
 
     server = couch.Server(url)
