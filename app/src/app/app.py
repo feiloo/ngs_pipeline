@@ -147,13 +147,16 @@ def create_app(config):
 @click.option('--dev', is_flag=True, default=False)
 @click.option('--config', 
         type=click.Path(exists=True, dir_okay=False, path_type=Path), 
-        default=Path('/etc/ngs_pipeline_config.json')
         )
 @click.pass_context
 def main(ctx, dev, config):
     if dev == True:
         loaded_config = testconfig
+    elif config is not None:
+        with config.open('r') as f:
+            loaded_config = json.loads(f.read())
     else:
+        config = Path('/etc/ngs_pipeline_config.json')
         with config.open('r') as f:
             loaded_config = json.loads(f.read())
 
