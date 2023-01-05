@@ -1,5 +1,5 @@
 import pycouchdb as couch
-from app.app import create_app, get_db, testconfig, init
+from app.app import create_app, get_db, testconfig, setup_views
 from time import sleep
 import pytest
 
@@ -16,12 +16,13 @@ def config():
     return testconfig
 
 @pytest.fixture(scope='session')
-def couchdb_server(config):
+def couchdb_server():
+    config=testconfig
     args = podman_args + [
         '--name=test_couchdb', 
         '-e', 'COUCHDB_USER=testuser', 
         '-e', 'COUCHDB_PASSWORD=testpsw', 
-        '-p', '8001:5984', 
+        '-p', '5984:5984', 
         'docker.io/apache/couchdb'
         ]
     proc = subprocess.run(args)
@@ -62,10 +63,11 @@ def rabbitmq_server(config):
 
 
 @pytest.fixture()
-def db(config, couchdb_server):
-    app_db = couchdb_server.create('ngs_app')
+def db(couchdb_server):
+    s = couchdb_server
+    app_db = s.create('ngs_app')
     yield app_db
-    couchdb_server.delete('ngs_app')
+    res = s.delete('ngs_app')
 
 
 @pytest.fixture()
@@ -113,7 +115,6 @@ def test_create_document(db):
             "run_names": [],
             }
 
-    print(db)
     db.save(init_doc)
 
     #_start_pipeline(app_db)
@@ -122,10 +123,20 @@ def test_create_document(db):
     assert res == init_doc
 
 
+def test_db_setup_views(db):
+    app_db = db 
+    setup_views(app_db)
 
-def test_db_init(db):
-    runner = CliRunner()
-    result = runner.invoke(init, ['--init'])
+def test_db_run(config, db):
+    app_db = db 
+    setup_views(app_db)
+
+    app = create_app(config)
+    with app.test_client() as test_client:
+        res = test_client.get('/pipeline_status')
+        assert res.status_code == 200
+        print(res.data)
+
 
 '''
 def test_poll_sequencer_output(app_db, app):
@@ -139,12 +150,4 @@ def test_poll_sequencer_output(app_db, app):
         _start_pipeline(app_db)
         res = app_db.get('sequencer_runs')
         assert res['run_names'] == ['220831_M03135_0376_000000000-KHR5V']
-'''
-
-
-
-
-'''
-with open('~/fm_example_record.json', 'r') as f:
-    example_record = json.loads(f.read().replace("'", '"'))
 '''
