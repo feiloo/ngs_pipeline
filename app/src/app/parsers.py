@@ -1,10 +1,10 @@
 from datetime import datetime
-from pyparsing import Word, nums, alphas, alphanums, one_of, Combine
+from pyparsing import Word, nums, alphas, alphanums, one_of, Combine, Opt, Literal
 
 #fastq_name_example = '1111-11_S11_L001_R1_001.fastq.gz'
 fastq_name = (
         Combine(Word(nums, exact=4) + '-' 
-            + Word(nums, exact=2))('sample_name') + '_'
+            + Word(nums, exact=2))('sample_name') + Opt(Literal('-wdh')) + '_'
         + Word('S', nums, min=2,max=3)('sample_number') + '_'
         + Word('L', nums, exact=4)('lane_number') + '_'
         + Combine('R' + one_of(list('12')))('read')
@@ -36,6 +36,7 @@ miseq_name = (
 # page 44 Appendix B output Files and Folders
 def parse_miseq_run_name(name):
     return miseq_name.parse_string(name).as_dict()
+
 
 #d = parse_miseq_run_name(miseq_name_example)
 #date = datetime.strptime(d['date'],'%y%m%d')

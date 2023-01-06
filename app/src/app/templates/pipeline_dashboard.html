@@ -38,12 +38,41 @@ td {
 
   <div>
    <form method=post name="pipeline_start" action='/pipeline_start' style='display: inline-block;'>
-    <button type="submit" value="Start">Start</button>
+    <button type="submit" value="start">Start</button>
    </form><form method=post name="pipeline_stop" action='/pipeline_stop' style='display: inline-block;'>
     <button type="submit" value="stop">Stop</button>
    </form>
   </div>
+
   <div>
+    <h2> Sequencer Runs </h2>
+	    <table> 
+	    <tr>
+		    <th>original path</th>
+		    <th>panel type</th>
+		    <th>save button</th>
+	    </tr>
+	    {% for run in sequencer_runs %}
+	    <tr>
+		<form method=post name="save_panel_type" action='/save_panel_type?run_id={{ run["_id"] }}'>
+		    <td><nobr><data>{{ run['original_path'] }}<data></td>
+		    <td>
+			<select name='panel_type'>
+				{% for pt in panel_types %}
+				  {% if pt == run['panel_type'] %}
+				    <option value="{{ pt }}" selected>{{ pt }} </option>
+				  {% else %}
+				    <option value="{{ pt }}">{{ pt }} </option>
+				  {% endif %}
+				{% endfor %}
+			</select>
+		    </td>
+		    <td><button type="submit" value="save">save</button> </td>
+    		</form>
+	    </tr>
+	    {% endfor %}
+	    </table>
+
     <h2> Pipeline Runs </h2>
 
     <table> 

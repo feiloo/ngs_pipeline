@@ -14,15 +14,7 @@ logger = logging.getLogger(__name__)
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun
 
-# this will be overwritten by the proper config in the app
-testconfig = {
-        'couchdb_user':'testuser',
-        'couchdb_psw':'testpsw',
-        'rabbitmq_user':'testuser',
-        'rabbitmq_psw':'testpsw',
-        'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
-        "dev":'true'
-        }
+from app.constants import testconfig
 
 
 def get_celery_config(config):
@@ -47,7 +39,6 @@ def get_db(url):
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
-    # Calls test('hello') every 10 seconds.
     sig = start_pipeline.signature(args=(config,))
     sender.add_periodic_task(300.0, sig, name='start pipeline every 300s')
 
@@ -59,9 +50,14 @@ def setup_periodic_tasks(sender, **kwargs):
     )
     '''
 
+
+
 @mq.task
 def poll_sequencer_output(app_db, config):
     # first, sync db with miseq output data
+    sequencer_runs = list(app_db.query('sequencer_runs/all'))
+    sequencer_paths = [str(r['key']['original_path']) for r in sequencer_runs]
+
     miseq_output_path = Path(config['miseq_output_folder'])
     miseq_output_runs = [miseq_output_path / x for x in miseq_output_path.iterdir()]
 
@@ -73,24 +69,29 @@ def poll_sequencer_output(app_db, config):
             parsed = {}
             dirty=True
 
+        #panel_type = infer_panel_type(samplesheet)
+
         # run folder name doesnt adhere to illumina naming convention
         # because it has been renamed or manually copied
         # we save the parsed information too, so we can efficiently query the runs
+
+        if str(run_name) in sequencer_paths:
+            continue
+
         run_document = {
                 'document_type':'sequencer_run',
                 'original_path':Path(run_name), 
                 'name_dirty':str(dirty), 
                 'parsed':parsed, 
-                'panel_type': 'NGS DNA Lungenpanel', 
+                'state': 'successful',
+                'panel_type': 'unset', 
                 'indexed_time':datetime.now()
                 }
+
         sequencer_run = SequencerRun(**run_document)
         #runs.append(run_document)
         app_db.save(json.loads(sequencer_run.json()))
 
-def poll_filemaker_data():
-    # poll recent filemaker data
-    pass
 
 def get_db_url(config):
     user = config['couchdb_user']
@@ -100,36 +101,38 @@ def get_db_url(config):
     url = f"http://{user}:{psw}@{host}:{port}"
     return url
 
-@mq.task
-def start_pipeline(config):
+def get_mp_number_from_path(p):
+    d = parse_fastq_name(Path(p).name)
+    return d['sample_name']
+
+
+def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
     app_db = get_db(get_db_url(config))
 
-    poll_sequencer_output(app_db, config)
-    #poll_filemaker_data()
-    miseq_output_folder = config['miseq_output_folder']
-    db_runs = app_db.query('sequencer_runs/all')
-    known_runs = set()#set([str(Path(r['key']['original_path']).name) for r in db_runs])
-    miseq_runs = set([str(Path(r).name) for r in Path(miseq_output_folder).iterdir()])
-    new_runs = miseq_runs - known_runs
+    workflows = {
+        'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        'NGS oncoHS' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        'NGS BRCAness': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        'NGS RNA Sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        'NGS PanCancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        }
 
-    if len(new_runs) == 0:
-        return
-
-    workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
+    #workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
     #workflow = '/data/ngs_pipeline/workflow/wdl/clc_test.wdl'
     #workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
 
-    workflow_inputs = []
-    
-    for new_run in new_runs:
-        for sample_path in (Path(miseq_output_folder) / new_run).rglob('*.fastq.gz'):
-            workflow_inputs.append(sample_path)
+    if panel_type == 'unset':
+        print('info, panel type not set, skipping')
+        return
 
+    workflow = workflows[panel_type]
 
     pipeline_document = {
             'document_type':'pipeline_run',
             'created_time':str(datetime.now()),
             'input_samples': [str(x) for x in workflow_inputs],
+            'sequencer_run': Path(sequencer_run_path),
             'workflow': workflow,
             'status': 'running',
             'logs': {
@@ -141,6 +144,7 @@ def start_pipeline(config):
     pipeline_run = PipelineRun(
             created_time=datetime.now(),
             input_samples=[str(x) for x in workflow_inputs],
+            sequencer_run=Path(sequencer_run_path),
             workflow=workflow,
             status='running',
             logs={
@@ -202,9 +206,9 @@ def start_pipeline(config):
 
                 retcode = pipeline_proc.returncode
                 if retcode == 0:
-                    pipeline_document.status = 'successful'
+                    pipeline_run.status = 'successful'
                 else:
-                    pipeline_document.status = 'error'
+                    pipeline_run.status = 'error'
 
                 pipeline_run = db_save(pipeline_run)
 
@@ -212,3 +216,46 @@ def start_pipeline(config):
         print(e)
         pipeline_document['status'] = 'error'
         pipeline_document = db_save(pipeline_document)
+
+
+@mq.task
+def start_pipeline(config):
+    app_db = get_db(get_db_url(config))
+
+    poll_sequencer_output(app_db, config)
+
+    miseq_output_folder = config['miseq_output_folder']
+
+    sequencer_runs = list(app_db.query('sequencer_runs/all'))
+    pipeline_runs = list(app_db.query('pipeline_runs/all'))
+
+    sequencer_run_ids = set([str(Path(r['key']['original_path']).name) for r in sequencer_runs])
+    pipeline_run_refs = set([str(Path(r['key']['sequencer_run']).name) for r in pipeline_runs])
+
+    new_run_ids = sequencer_run_ids - pipeline_run_refs
+
+    new_runs = list(filter(
+        lambda x: str(Path(x['key']['original_path']).name) in new_run_ids, 
+        sequencer_runs)
+        )
+
+    if len(new_runs) == 0:
+        print('no new runs')
+        return
+
+    for new_run in new_runs:
+        if new_run['key']['state'] != 'successful':
+            continue
+
+        workflow_inputs = []
+        mp_numbers = []
+
+        for sample_path in (Path(miseq_output_folder) / Path(new_run['key']['original_path']).name).rglob('*.fastq.gz'):
+            try:
+                #mp_numbers.append(get_mp_number_from_path(str(sample_path)))
+                workflow_inputs.append(sample_path)
+            except Exception as e:
+                print(f'error: {e}')
+        
+        start_run(config, workflow_inputs, new_run['key']['panel_type'], new_run['key']['original_path'])
+

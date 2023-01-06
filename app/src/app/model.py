@@ -6,18 +6,18 @@ import json
 
 runformat: ['miseq_0', 'only_fastq']
 
-
-'''
-document_types:
-    - pipeline_run
-    - sequencer_run
-    - patient_result
-    - study_reference
-'''
-
 DATA_MODEL_VERSION = '0.0.1'
 
 # based on the ordercodes of "NGS_Panel_Abdeckung_MolPath.docx"
+panel_types = [
+        'unset', 
+        'NGS DNA Lungenpanel', 
+        'NGS oncoHS', 
+        'NGS BRCAness', 
+        'NGS RNA Sarkom', 
+        'NGS RNA Fusion Lunge', 
+        'NGS PanCancer'
+        ]
 PanelType = Literal[
         'unset', 
         'NGS DNA Lungenpanel', 
@@ -27,6 +27,13 @@ PanelType = Literal[
         'NGS RNA Fusion Lunge', 
         'NGS PanCancer'
         ]
+
+primerMixes = {
+        'C1': {
+            'panel type': 'unknown',
+            'primers': [],
+            }
+        }
 
 
 class BaseDocument(BaseModel):
@@ -62,6 +69,8 @@ class PipelineRun(BaseDocument):
     document_type: str = 'pipeline_run'
     created_time: datetime
     input_samples: List[Path]
+    workflow: str
+    sequencer_run: Path
     status: str
     logs: PipelineLogs
 
@@ -71,41 +80,18 @@ class SequencerRun(BaseDocument):
     name_dirty: bool
     parsed: dict
     indexed_time: datetime
+    state: str = 'unfinished'
     # a targeted sequencer run, is always related to a single type of diagnostic panel
     # this is needed to later choose the right workflow
     panel_type: PanelType
-
 
 class MolYearNumber(BaseModel):
     molnumber: int
     molyear: int
 
-class MiSeqRunOutputRef(BaseModel):
-    # the path on the PAT sequencer NAS
-    path: str
-    samplesheet: str
-    fastq: list #[str]
-    has_logs: bool
-
-class TrackingFormLine(BaseModel):
-    row_number: int
-    kit: str
-    molnr: str
-    concentration: float
-    index1: str
-    index2: str
-    probe: float
-    aqua: float
-
-class TrackingForm(BaseModel):
-    date: datetime
-    #lines: list[TrackingFormLine]
-
-
 class Examination(BaseModel):
     ''' medical examination '''
-    examinationtype: str # u_type
-    ''' one of oncohs, ... '''
+    examinationtype: str
 
 class Person(BaseModel):
     name: str

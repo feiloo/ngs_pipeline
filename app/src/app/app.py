@@ -6,33 +6,42 @@ import logging
 import requests
 import click
 
+from pydantic import BaseModel
+
 import pycouchdb as couch
 
 from flask import Flask, render_template, flash, request, redirect, url_for, g, current_app, Blueprint
 from werkzeug.utils import secure_filename
 
 from app.constants import *
+from app.constants import testconfig
+from app.model import panel_types
+
 from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.tasks import mq, start_pipeline, get_celery_config
+
 
 PIPELINE_VERSION = '0.0.1'
 UPLOAD_FOLDER = '/tmp/uploads'
 
 admin = Blueprint('admin', __name__, url_prefix='/')
 
-testconfig = {
-        'couchdb_host': 'localhost',
-        "couchdb_user":'testuser',
-        'couchdb_psw':'testpsw',
-        'clc_host': 'localhost',
-        'clc_user': 'testuser',
-        'clc_psw': 'testpsw',
-        'rabbitmq_user':'testuser',
-        'rabbitmq_psw':'testpsw',
-        'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
-        "dev":'true'
-        }
+
+class AppConfig(BaseModel):
+    couchdb_host: str
+    couchdb_user: str
+    couchdb_psw: str
+    clc_hots: str
+    clc_user: str
+    clc_psw: str
+    rabbitmq_user: str
+    rabbitmq_psw: str
+    miseq_output_folder: str
+    dev: str
+    app_secret_key: bytes
+
+
 
 def _get_pipeline_dashboard_html():
     progress = 0
@@ -42,12 +51,18 @@ def _get_pipeline_dashboard_html():
     dn = datetime.now()
     for pr in p:
         pr['age'] = dn - datetime.fromisoformat(pr['created_time'])
+    
+    sequencer_runs = list(get_db(current_app).query('sequencer_runs/all'))
+    r = [x['key'] for x in sequencer_runs]
+    #print(r)
 
     return render_template('pipeline_dashboard.html', 
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status='running',
             pipeline_runs=reversed(sorted(p, key=lambda x: datetime.fromisoformat(x['created_time']))),
+            sequencer_runs=reversed(sorted(r, key=lambda x: datetime.fromisoformat(x['indexed_time']))),
+            panel_types=panel_types
             )
 
 
@@ -61,6 +76,18 @@ def pipeline_start():
 def stop_pipeline():
     current_app.logger.info('stop pipeline')
     #_stop_pipeline(app_db)
+    return redirect('/pipeline_status')
+
+@admin.route("/save_panel_type", methods=['POST'])
+def save_panel_type():
+    sequencer_run_id = request.args.get('run_id')
+    run = get_db(current_app).get(sequencer_run_id)
+    if run['panel_type'] != 'unset':
+        print('error panel_type is already set')
+    else:
+        run['panel_type'] = request.form['panel_type']
+        get_db(current_app).save(run)
+
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_status", methods=['GET'])
@@ -137,7 +164,7 @@ def setup_views(app_db):
 
 def create_app(config):
     app = Flask(__name__)
-    app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+    app.secret_key = config.pop('app_secret_key')
     app.config['data'] = config
 
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
