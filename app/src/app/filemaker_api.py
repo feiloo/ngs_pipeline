@@ -1,12 +1,18 @@
 import datetime
 import json
 import requests
+from pathlib import Path
+from math import ceil
 
+
+with open('/etc/ngs_pipeline_config.json', 'r') as f:
+    config = json.loads(f.read())
+
+assert 'filemaker_server' in config
 assert 'filemaker_user' in config
 assert 'filemaker_psw' in config
-assert 'filemaker_server' in config
 
-session_url = 'https://ukb1144/fmi/data/v1/databases/molpatho_Leistungserfassung/sessions'
+session_url = f"https://{config['filemaker_server']}/fmi/data/v1/databases/molpatho_Leistungserfassung/sessions"
 def get_token():
     r = requests.post(
             session_url, 
@@ -23,7 +29,7 @@ def get_token():
         f.write(d)
 
 def auth():
-    if not os.path.exists('/tmp/fmrest_cache'):
+    if not Path('/tmp/fmrest_cache').exists():
         get_token()
 
     with open('/tmp/fmrest_cache','r') as f:
@@ -62,9 +68,23 @@ def find_records():
                 "Authorization": f"Bearer {token}"}
                 )
     return r.json()
+
+def find_mp_record(token, mp_number):
+    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
+    d = json.dumps({"query":[{"Mol_NR":f"=={mp_number}"}],
+                "limit":10
+                })
+    r = requests.post(
+            record_url, 
+            data=d,
+            verify=False,
+            headers={'Content-Type': 'application/json',
+                "Authorization": f"Bearer {token}"}
+                )
+    return r.json()
     
 token = auth()
 #records = get_records()
-records = find_records()
+#records = find_records()
 #print(str(records).replace("'", '"'))
 #print(records['response']['data'][0]['fieldData'])
