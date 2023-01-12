@@ -65,6 +65,42 @@ def _get_pipeline_dashboard_html():
             panel_types=panel_types
             )
 
+@admin.route("/tracking_form", methods=['get'])
+def tracking_form():
+    asample = {
+        'id':'1',
+        'kit': 'RNA 652', 
+        'molnr': '2392/22',
+        'konz': '2.3', 
+        'index1':'il-n726', 
+        'index2':'il-s503', 
+        'probe':'5', 
+        'aqua':'0'
+        }
+
+    samples = [
+        asample,
+        asample
+        ]
+    form = {
+        'samples':samples,
+        'date': 'today'
+        }
+    return render_template(
+        'tracking_form.html', 
+        version=PIPELINE_VERSION,
+        form=form,
+        panel_types=panel_types)
+
+@admin.route("/save_tracking_form", methods=['POST'])
+def save_tracking_form():
+    form_id = request.args.get('form_id')
+    #run = get_db(current_app).get(sequencer_run_id)
+    print(request.form)
+
+    #get_db(current_app).save(run)
+
+    return redirect('/tracking_form')
 
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():

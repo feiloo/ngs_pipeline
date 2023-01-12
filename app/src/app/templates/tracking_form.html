@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<style>
+table, td, th {
+	border: 1px solid black;
+}
+table {
+	width: 80%;
+	border-collapse: collapse;
+}
+td {
+	text-align: center;
+	max-width:600px;
+}
+</style>
+
+<title>Tracking form submit</title>
+</head>
+
+<body>
+  <h1>Tracking Form</h1>
+
+  <div>
+  App Version: {{ app_version }}
+  </div>
+
+  <div>
+  Datum: {{ form['date'] }}
+  </div>
+
+  <div>
+    <h2> Tracking form </h2>
+
+    <table> 
+    <tr>
+    <th>Kit</th>
+    <th>Mol-Nr.</th>
+    <th>Konz.</th>
+    <th>Index1</th>
+    <th>Index2</th>
+    <th>Probe</th>
+    <th>Aqua</th>
+
+    </tr>
+    <form method=post name="save_tracking_form" action='/save_tracking_form?form_id={{ form["date"] }}'>
+    {% for sample in form['samples'] %}
+    <tr>
+	    <!-- <td><nobr><data>{{ sample['kit'] }}<data></td> -->
+            
+	    <td>
+		<select name='panel_type'>
+		{% for pt in panel_types %}
+		  {% if pt == sample['kit'] %}
+		    <option value="{{ pt }}" selected>{{ pt }} </option>
+		  {% else %}
+		    <option value="{{ pt }}">{{ pt }} </option>
+		  {% endif %}
+		{% endfor %}
+		</select>
+	    </td>
+	    <td><nobr><data><input name='{{sample["id"]}}_molnr' type='text' value={{ sample['molnr'] }}></input><data></td>
+	    <td><nobr><data><input type='text' value={{ sample['konz'] }}></input><data></td>
+	    <td><nobr><data><input type='text' value={{ sample['index1'] }}></input><data></td>
+	    <td><nobr><data><input type='text' value={{ sample['index2'] }}></input><data></td>
+	    <td><nobr><data><input type='text' value={{ sample['probe'] }}></input><data></td>
+	    <td><nobr><data><input type='text' value={{ sample['aqua'] }}></input><data></td>
+
+    </tr>
+    {% endfor %}
+    </table>
+      <button type="submit" value="save">save</button>
+      <div> Note! finished the samplesheet marks it readonly and ready to use in other processes such as ngs computations</div>
+      <button type="submit" value="finish">finish</button>
+      <div> samplesheet saved to location </div>
+    </form>
+  </div>
+
+
+</body>
+
