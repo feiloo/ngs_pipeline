@@ -30,6 +30,33 @@ td {
   </div>
 
   <div>
+    <h2> unassigned cases (synchronized from filemaker)</h2>
+
+    <table> 
+    <tr>
+      <th>Patient-Vorname</th>
+      <th>Patient-Name</th>
+      <th>Mol-Nr.</th>
+      <th>Examination-Type</th>
+      <th>Examination-history</th>
+    </tr>
+    {% for case in cases %}
+    <tr>
+      <form method=post name="select_case_to_run" action='/select_case_to_run?case_molnr={{case["Mol_NR"]}}'>
+      <th>{{ case['Vorname'] }}</th>
+      <th>{{ case['Name'] }}</th>
+      <th>{{ case['Mol_NR'] }}</th>
+      <th>{{ case['Untersuchung'] }}</th>
+      <th>link to patient-examination history view</th>
+      <th><button type="submit" value="select">select</button></th>
+      </form>
+    </tr>
+
+
+    {% endfor %}
+    </table> 
+
+  <div>
     <h2> Tracking form </h2>
 
     <table> 
@@ -43,13 +70,12 @@ td {
     <th>Aqua</th>
 
     </tr>
-    <form method=post name="save_tracking_form" action='/save_tracking_form?form_id={{ form["date"] }}'>
+    <form method=post name="save_tracking_form" action='/save_tracking_form?form_id={{ form["id"] }}'>
     {% for sample in form['samples'] %}
     <tr>
 	    <!-- <td><nobr><data>{{ sample['kit'] }}<data></td> -->
-            
 	    <td>
-		<select name='panel_type'>
+		<select name='{{row_nr}}_panel_type'>
 		{% for pt in panel_types %}
 		  {% if pt == sample['kit'] %}
 		    <option value="{{ pt }}" selected>{{ pt }} </option>
@@ -59,13 +85,12 @@ td {
 		{% endfor %}
 		</select>
 	    </td>
-	    <td><nobr><data><input name='{{sample["id"]}}_molnr' type='text' value={{ sample['molnr'] }}></input><data></td>
-	    <td><nobr><data><input type='text' value={{ sample['konz'] }}></input><data></td>
-	    <td><nobr><data><input type='text' value={{ sample['index1'] }}></input><data></td>
-	    <td><nobr><data><input type='text' value={{ sample['index2'] }}></input><data></td>
-	    <td><nobr><data><input type='text' value={{ sample['probe'] }}></input><data></td>
-	    <td><nobr><data><input type='text' value={{ sample['aqua'] }}></input><data></td>
-
+	    <td><nobr><data><input name='{{sample.id}}_molnr' type='text' value={{ sample['molnr'] }}></input><data></td>
+	    <td><nobr><data><input name='{{sample.id}}_concentration' type='text' value={{ sample['concentration'] }}></input><data></td>
+	    <td><nobr><data><input name='{{sample.id}}_index1' type='text' value={{ sample['index1'] }}></input><data></td>
+	    <td><nobr><data><input name='{{sample.id}}_index2' type='text' value={{ sample['index2'] }}></input><data></td>
+	    <td><nobr><data><input name='{{sample.id}}_sample_volume' type='text' value={{ sample['sample_volume'] }}></input><data></td>
+	    <td><nobr><data><input name='{{sample.id}}_sample_water' type='text' value={{ sample['sample_water'] }}></input><data></td>
     </tr>
     {% endfor %}
     </table>

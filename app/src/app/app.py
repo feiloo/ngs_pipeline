@@ -15,18 +15,21 @@ from werkzeug.utils import secure_filename
 
 from app.constants import *
 from app.constants import testconfig
-from app.model import panel_types
+from app.model import panel_types, SequencerInputSample, TrackingForm, Examination, Patient
 
 from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
-from app.tasks import mq, start_pipeline, get_celery_config
+from app.tasks import mq, start_pipeline, get_celery_config, sync_couchdb_to_filemaker
+from app.filemaker_api import get_new_records
 
+import pycouchdb
 
-PIPELINE_VERSION = '0.0.1'
+APP_VERSION = '0.0.1'
+PIPELINE_VERSION = APP_VERSION
+
 UPLOAD_FOLDER = '/tmp/uploads'
 
 admin = Blueprint('admin', __name__, url_prefix='/')
-
 
 class AppConfig(BaseModel):
     couchdb_host: str
@@ -55,6 +58,7 @@ def _get_pipeline_dashboard_html():
     sequencer_runs = list(get_db(current_app).query('sequencer_runs/all'))
     r = [x['key'] for x in sequencer_runs]
     #print(r)
+    sync_couchdb_to_filemaker.apply_async(args=(dict(current_app.config['data']),))
 
     return render_template('pipeline_dashboard.html', 
             pipeline_version=PIPELINE_VERSION,
@@ -68,37 +72,85 @@ def _get_pipeline_dashboard_html():
 @admin.route("/tracking_form", methods=['get'])
 def tracking_form():
     asample = {
-        'id':'1',
+        'id':'2392/22',
         'kit': 'RNA 652', 
         'molnr': '2392/22',
-        'konz': '2.3', 
+        'concentration': 2.3, 
         'index1':'il-n726', 
         'index2':'il-s503', 
-        'probe':'5', 
-        'aqua':'0'
+        'sample_volume':5, 
+        'sample_water':0
         }
 
+    selected_cases = get_db(current_app).get('selected_cases')['cases']
+
+    dt = datetime.now()
+    recs = get_new_records(dt.day-3, dt.month, dt.year)
+    fm_recs = recs['response']['data']
+
+    unselected_cases = list(filter(
+        lambda c: str(c['Mol_NR']) not in selected_cases,
+        [x['fieldData'] for x in fm_recs]
+    ))
+
     samples = [
-        asample,
-        asample
+        #SequencerInputSample(**asample).to_dict(),
+        SequencerInputSample(**{
+            'id':f'{molnr}',
+            'kit': 'RNA 652', 
+            'molnr': f'{molnr}',
+            'concentration': 2.3, 
+            'index1':'il-n726', 
+            'index2':'il-s503', 
+            'sample_volume':5, 
+            'sample_water': 0
+            })
+            for molnr in selected_cases
         ]
-    form = {
+
+    f = {
         'samples':samples,
-        'date': 'today'
+        'created_time': datetime.now()
         }
+
+    tracking_form = TrackingForm(**f)
+
     return render_template(
         'tracking_form.html', 
         version=PIPELINE_VERSION,
-        form=form,
-        panel_types=panel_types)
+        form=tracking_form.dict(),
+        panel_types=panel_types,
+        cases=unselected_cases
+        )
+
+@admin.route("/select_case_to_run", methods=['POST'])
+def select_case_to_run():
+    case_molnr = request.args.get('case_molnr')
+
+    selected_cases = get_db(current_app).get('selected_cases')
+    selected_cases['cases'] = list(set(selected_cases['cases'] + [case_molnr]))
+    get_db(current_app).save(selected_cases)
+
+    print(case_molnr)
+    return redirect('/tracking_form')
 
 @admin.route("/save_tracking_form", methods=['POST'])
 def save_tracking_form():
     form_id = request.args.get('form_id')
-    #run = get_db(current_app).get(sequencer_run_id)
-    print(request.form)
 
-    #get_db(current_app).save(run)
+    if form_id is None:
+        pass
+
+    print(request.form)
+    '''
+    try:
+        form = get_db(current_app).get(form_id)
+        print(request.form)
+        #get_db(current_app).save(run)
+    except pycouchdb.exceptions.NotFound:
+        pass
+        #get_db(current_app).save(run)
+    '''
 
     return redirect('/tracking_form')
 

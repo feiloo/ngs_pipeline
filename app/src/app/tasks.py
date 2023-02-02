@@ -15,6 +15,7 @@ from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun
 
 from app.constants import testconfig
+from app.filemaker_api import get_all_records
 
 
 def get_celery_config(config):
@@ -37,10 +38,13 @@ def get_db(url):
     return app_db
 
 
+
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sig = start_pipeline.signature(args=(config,))
     sender.add_periodic_task(300.0, sig, name='start pipeline every 300s')
+
+    #sender.add_periodic_task(300.0, sig, name='sync filemaker to couchdb')
 
     # Executes every day at midnight
     '''
@@ -51,6 +55,21 @@ def setup_periodic_tasks(sender, **kwargs):
     '''
 
 
+@mq.task
+def sync_couchdb_to_filemaker(config):
+    app_db = get_db(get_db_url(config))
+    for i in range(10):
+        time.sleep(5)
+        resp = get_all_records(off=i*1000+1)
+        print(resp)
+        recs = resp['response']['data']
+        print('s couch', len(recs))
+        for i,r in enumerate(recs):
+            d = r['fieldData']
+            d['document_type']='filemaker_record'
+            app_db.save(d)
+            print(f"saved {i}")
+    
 
 @mq.task
 def poll_sequencer_output(app_db, config):
@@ -258,4 +277,3 @@ def start_pipeline(config):
                 print(f'error: {e}')
         
         start_run(config, workflow_inputs, new_run['key']['panel_type'], new_run['key']['original_path'])
-
