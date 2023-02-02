@@ -74,4 +74,3 @@ testconfig = {
         "dev":'true',
         "app_secret_key": b'_5#y2L"F4Q8z\n\xec]/'
         }
-

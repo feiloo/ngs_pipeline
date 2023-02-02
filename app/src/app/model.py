@@ -35,6 +35,22 @@ primerMixes = {
             }
         }
 
+# examination identifiers used in filemaker
+filemaker_examination_types = [
+        'DNA Lungenpanel Qiagen - kein nNGM Fall',
+        'DNA Panel ONCOHS',
+        'DNA PANEL ONCOHS (Mamma)', # basically calls ONCOHS,
+        'DNA PANEL ONCOHS (Melanom)',# basically calls ONCOHS
+        'DNA PANEL ONCOHS (Colon)',# basically calls ONCOHS
+        'DNA PANEL ONCOHS (GIST)',# basically calls ONCOHS
+        'DNA PANEL 522', # research panel
+        'DNA PANEL Multimodel PanCancer DNA',
+        'DNA PANEL Multimodel PanCancer RNA',
+        'NNGM Lunge Qiagen',
+        'RNA Fusion Lunge',
+        'RNA Sarkompanel',
+        ]
+
 
 class BaseDocument(BaseModel):
     id: Optional[str]
@@ -61,6 +77,7 @@ class BaseDocument(BaseModel):
         m = type(self)(**d)
         return m
 
+
 class PipelineLogs(BaseModel):
     stdout: str
     stderr: str
@@ -85,12 +102,43 @@ class SequencerRun(BaseDocument):
     # this is needed to later choose the right workflow
     panel_type: PanelType
 
+
+class SampleBlock(BaseDocument):
+    patient_ref: int
+
+class SampleCuts(BaseDocument):
+    block_ref: int
+
+class SampleExtraction(BaseDocument):
+    sample_cut_ref: int
+    molnr: str
+
+class SequencerInputSample(BaseDocument):
+    document_type: str = 'sequencer_input_sample'
+    kit: str
+    molnr: str # references sample-extraction
+    concentration: float
+    index1: str
+    index2: str
+    sample_volume: float
+    sample_water: float
+    final: bool = False
+    repetition: bool = False
+
+
+
+class TrackingForm(BaseDocument):
+    document_type: str = 'tracking_form'
+    created_time: datetime
+    samples: List[SequencerInputSample]
+    
+
 class MolYearNumber(BaseModel):
     molnumber: int
     molyear: int
 
 class Examination(BaseModel):
-    ''' medical examination '''
+    ''' medical examination/case '''
     examinationtype: str
 
 class Person(BaseModel):
@@ -99,13 +147,16 @@ class Person(BaseModel):
 
 class Patient(Person):
     mp_nr: str
-    examinations: list
+    examinations: List[Examination]
     birthdate: datetime
     gender: str
 
 class Pathologist(Person):
     name: str
     short_name: str
+
+class Result(BaseModel):
+    description: str
 
 
 #we need to create different taxonomical concepts for "workflow"
