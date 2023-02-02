@@ -3,7 +3,7 @@ import json
 import requests
 from pathlib import Path
 from math import ceil
-
+from app.model import filemaker_examination_types
 
 with open('/etc/ngs_pipeline_config.json', 'r') as f:
     config = json.loads(f.read())
@@ -13,6 +13,11 @@ assert 'filemaker_user' in config
 assert 'filemaker_psw' in config
 
 session_url = f"https://{config['filemaker_server']}/fmi/data/v1/databases/molpatho_Leistungserfassung/sessions"
+
+# names used in filemaker
+untersuchungen = filemaker_examination_types
+
+
 def get_token():
     r = requests.post(
             session_url, 
@@ -44,9 +49,21 @@ def auth():
     return token
 
 fm_baseurl = f"https://{config['filemaker_server']}/fmi/data/v1/databases"
+token = auth()
 
 def get_records():
     record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/records?_limit=10&_offset=40000'
+    r = requests.get(
+            record_url, 
+            verify=False,
+            headers={'Content-Type': 'application/json',
+                "Authorization": f"Bearer {token}"}
+                )
+    return r.json()
+
+def get_all_records(off):
+    print(off)
+    record_url = fm_baseurl+f'/molpatho_Leistungserfassung/layouts/Leistungserfassung/records?_limit=1000&_offset={off}'
     r = requests.get(
             record_url, 
             verify=False,
@@ -82,8 +99,26 @@ def find_mp_record(token, mp_number):
                 "Authorization": f"Bearer {token}"}
                 )
     return r.json()
+
+def get_new_records(day, month, year, untersuchungen=untersuchungen):
+    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
+
+    d = json.dumps({"query":[
+        {"Zeitstempel":f">={int(month)}/{(day)}/{(year)}", 
+            'Untersuchung':f'="{u}"'}
+        for u in untersuchungen
+        ],
+        "limit":1000
+        })
+    r = requests.post(
+            record_url, 
+            data=d,
+            verify=False,
+            headers={'Content-Type': 'application/json',
+                "Authorization": f"Bearer {token}"}
+                )
+    return r.json()
     
-token = auth()
 #records = get_records()
 #records = find_records()
 #print(str(records).replace("'", '"'))
