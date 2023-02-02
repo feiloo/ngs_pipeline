@@ -29,6 +29,7 @@ log into the registry:
 ```
 podman login localhost:5000
 ```
+the username and password are emtpy by default
 
 push a container to the registry:
 ```
