@@ -4,6 +4,8 @@ from pathlib import Path
 from pydantic import BaseModel
 import json
 
+# some runs are missing information because of device or network failure
+# for those only the fastq data is available
 runformat: ['miseq_0', 'only_fastq']
 
 DATA_MODEL_VERSION = '0.0.1'

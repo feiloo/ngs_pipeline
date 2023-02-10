@@ -20,7 +20,7 @@ from app.model import panel_types, SequencerInputSample, TrackingForm, Examinati
 from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.tasks import mq, start_pipeline, get_celery_config, sync_couchdb_to_filemaker
-from app.filemaker_api import get_new_records
+#from app.filemaker_api import get_new_records
 
 import pycouchdb
 
@@ -43,7 +43,6 @@ class AppConfig(BaseModel):
     miseq_output_folder: str
     dev: str
     app_secret_key: bytes
-
 
 
 def _get_pipeline_dashboard_html():
@@ -85,7 +84,7 @@ def tracking_form():
     selected_cases = get_db(current_app).get('selected_cases')['cases']
 
     dt = datetime.now()
-    recs = get_new_records(dt.day-3, dt.month, dt.year)
+    #recs = get_new_records(dt.day-3, dt.month, dt.year)
     fm_recs = recs['response']['data']
 
     unselected_cases = list(filter(

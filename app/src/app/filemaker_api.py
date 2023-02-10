@@ -5,121 +5,115 @@ from pathlib import Path
 from math import ceil
 from app.model import filemaker_examination_types
 
-with open('/etc/ngs_pipeline_config.json', 'r') as f:
-    config = json.loads(f.read())
 
-assert 'filemaker_server' in config
-assert 'filemaker_user' in config
-assert 'filemaker_psw' in config
+class Filemaker:
+    def __init__(self, server, user, psw):
+        self.server = server
+        self.user = user
+        self.psw = psw
 
-session_url = f"https://{config['filemaker_server']}/fmi/data/v1/databases/molpatho_Leistungserfassung/sessions"
+        # todo, this is sadly needed with the current settings
+        self.ssl_verify = False
 
-# names used in filemaker
-untersuchungen = filemaker_examination_types
+        self.fm_baseurl = f"https://{self.server}/fmi/data/v1/databases"
+        self.session_url = f"{self.fm_baseurl}/molpatho_Leistungserfassung/sessions"
+
+        self._token_ttl = datetime.timedelta(14*1/(24*60)) # in days, around 14 minutes
+
+        self._token = None
+
+    def _get_new_token(self):
+        r = requests.post(
+                self.session_url, 
+                auth=(self.user,self.psw), 
+                verify=self.ssl_verify,
+                headers={'Content-Type': 'application/json'})
+
+        r.raise_for_status()
+        self._token_timestamp = datetime.datetime.now()
+        return r.json()['response']['token']
+
+    @property
+    def token(self):
+        ''' gets a filemaker auth token, and caches it for 14 minutes
+        filemaker tokens expire after 15 minutes
+        '''
+        if self._token is None:
+            self._token = self._get_new_token()
+        elif datetime.datetime.now() > self._token_timestamp + self._token_ttl:
+            self._token = self._get_new_token()
+
+        return self._token
 
 
-def get_token():
-    r = requests.post(
-            session_url, 
-            auth=(config['filemaker_user'],config['filemaker_psw']), 
-            verify=False,
-            headers={'Content-Type': 'application/json'})
-    
+    def logout(self):
+        ''' explicitely logout of a session, instead of letting it expire after 15 minutes '''
+        if self._token is not None:
+            url = f'{self.session_url}/sessions/{self._token}'
+            r = requests.delete(
+                    url,
+                    verify=self.ssl_verify
+                    )
+            r.raise_for_status()
+            self._token = None
+                
 
-    # filemakers session tokens last for 15 minutes
-    ttl = 14*1/(24*60) # in days, around 14 minutes
-    cache_timer = (datetime.datetime.now() + datetime.timedelta(ttl)).timestamp()
-    with open('/tmp/fmrest_cache','w') as f:
-        d = json.dumps({'token':r.json(), 'time':str(cache_timer)})
-        f.write(d)
+    def __enter__(self):
+        ''' automatically logs in when self.token is accessed '''
+        pass
 
-def auth():
-    if not Path('/tmp/fmrest_cache').exists():
-        get_token()
+    def __exit__(self):
+        self.logout()
 
-    with open('/tmp/fmrest_cache','r') as f:
-        d = json.loads(f.read())
+    def _get(self, url):
+        r = requests.get(
+                url, 
+                verify=self.ssl_verify,
+                headers={'Content-Type': 'application/json',
+                    "Authorization": f"Bearer {self.token}"}
+                    )
+        r.raise_for_status()
+        return r.json()['response']
 
-    cache_time = datetime.datetime.fromtimestamp(ceil(float(d['time'])))
-    if cache_time < datetime.datetime.now():
-        print('renewing token')
-        get_token()
+    def _post(self, url, data):
+        r = requests.get(
+                url, 
+                data=data,
+                verify=self.ssl_verify,
+                headers={'Content-Type': 'application/json',
+                    "Authorization": f"Bearer {self.token}"}
+                    )
+        r.raise_for_status()
+        return r.json()['response']
 
-    token = d['token']['response']['token']
-    return token
 
-fm_baseurl = f"https://{config['filemaker_server']}/fmi/data/v1/databases"
-token = auth()
+    def get_all_records(self, offset, limit=1000):
+        ''' bulk gets record in creation order and paginated '''
+        url = f'{self.fm_baseurl}/molpatho_Leistungserfassung/layouts/Leistungserfassung/records?_limit={limit}&_offset={offset}'
+        return self._get(url)
 
-def get_records():
-    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/records?_limit=10&_offset=40000'
-    r = requests.get(
-            record_url, 
-            verify=False,
-            headers={'Content-Type': 'application/json',
-                "Authorization": f"Bearer {token}"}
-                )
-    return r.json()
+    def find_records(self):
+        url = f'{self.fm_baseurl}/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
+        data = json.dumps({"query":[{"Zeitstempel":">=10/18/2022"}],
+                    "limit":100
+                    })
+        return self._post(url, data)
 
-def get_all_records(off):
-    print(off)
-    record_url = fm_baseurl+f'/molpatho_Leistungserfassung/layouts/Leistungserfassung/records?_limit=1000&_offset={off}'
-    r = requests.get(
-            record_url, 
-            verify=False,
-            headers={'Content-Type': 'application/json',
-                "Authorization": f"Bearer {token}"}
-                )
-    return r.json()
+    def find_mp_record(self, token, mp_number):
+        url = f'{self.fm_baseurl}/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
+        data = json.dumps({"query":[{"Mol_NR":f"=={mp_number}"}],
+                    "limit":10
+                    })
+        return self._post(url, data)
 
-def find_records():
-    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
-    d = json.dumps({"query":[{"Zeitstempel":">=10/18/2022"}],
-                "limit":100
-                })
-    r = requests.post(
-            record_url, 
-            data=d,
-            verify=False,
-            headers={'Content-Type': 'application/json',
-                "Authorization": f"Bearer {token}"}
-                )
-    return r.json()
+    def get_new_records(self, day, month, year, examination_types=filemaker_examination_types):
+        url = f'{self.fm_baseurl}/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
 
-def find_mp_record(token, mp_number):
-    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
-    d = json.dumps({"query":[{"Mol_NR":f"=={mp_number}"}],
-                "limit":10
-                })
-    r = requests.post(
-            record_url, 
-            data=d,
-            verify=False,
-            headers={'Content-Type': 'application/json',
-                "Authorization": f"Bearer {token}"}
-                )
-    return r.json()
-
-def get_new_records(day, month, year, untersuchungen=untersuchungen):
-    record_url = fm_baseurl+'/molpatho_Leistungserfassung/layouts/Leistungserfassung/_find'
-
-    d = json.dumps({"query":[
-        {"Zeitstempel":f">={int(month)}/{(day)}/{(year)}", 
-            'Untersuchung':f'="{u}"'}
-        for u in untersuchungen
-        ],
-        "limit":1000
-        })
-    r = requests.post(
-            record_url, 
-            data=d,
-            verify=False,
-            headers={'Content-Type': 'application/json',
-                "Authorization": f"Bearer {token}"}
-                )
-    return r.json()
-    
-#records = get_records()
-#records = find_records()
-#print(str(records).replace("'", '"'))
-#print(records['response']['data'][0]['fieldData'])
+        data = json.dumps({"query":[
+            {"Zeitstempel":f">={int(month)}/{(day)}/{(year)}", 
+                'Untersuchung':f'="{u}"'}
+            for u in examination_types
+            ],
+            "limit":1000
+            })
+        return self._post(url,data)

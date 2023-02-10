@@ -15,7 +15,7 @@ from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun
 
 from app.constants import testconfig
-from app.filemaker_api import get_all_records
+from app.filemaker_api import Filemaker
 
 
 def get_celery_config(config):
@@ -32,12 +32,22 @@ mq = Celery('ngs_pipeline',
         )
 
 
+with open('/etc/ngs_pipeline_config.json', 'r') as f:
+    config = json.loads(f.read())
+
+assert 'filemaker_server' in config
+assert 'filemaker_user' in config
+assert 'filemaker_psw' in config
+
+filemaker = Filemaker(
+        config['filemaker_server'], 
+        config['filemaker_user'], 
+        config['filemaker_psw'])
+
 def get_db(url):
     server = couch.Server(url)
     app_db = server.database('ngs_app')
     return app_db
-
-
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
@@ -45,7 +55,6 @@ def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(300.0, sig, name='start pipeline every 300s')
 
     #sender.add_periodic_task(300.0, sig, name='sync filemaker to couchdb')
-
     # Executes every day at midnight
     '''
     sender.add_periodic_task(
@@ -58,11 +67,13 @@ def setup_periodic_tasks(sender, **kwargs):
 @mq.task
 def sync_couchdb_to_filemaker(config):
     app_db = get_db(get_db_url(config))
-    for i in range(10):
+
+    for i in range(2):
+        # backoff for a few seconds
         time.sleep(5)
-        resp = get_all_records(off=i*1000+1)
+        resp = filemaker.get_all_records(offset=i*1000+1)
         print(resp)
-        recs = resp['response']['data']
+        recs = resp['data']
         print('s couch', len(recs))
         for i,r in enumerate(recs):
             d = r['fieldData']
