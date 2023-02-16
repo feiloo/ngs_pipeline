@@ -6,7 +6,7 @@ with coverage below 100 and to add current inernal variantlist (variantDBi)
 Input: xlsx-file from CLC workbench OncoHS workflow, exontableOncoHS.xlxs and
 variantDBi.xlsx
 Current variantDBi is hardcoded, newer versions of the variantDBi has to be 
-updated in this script (line: 146)
+updated in this script (line: 142)
 Output: xlsx file (sorted OncoHS variantlist with added variantDBi and exon 
 information with coverage below 100)
 
@@ -114,10 +114,6 @@ print("--> Sorting unfiltered and filtered sheets: sucessful!")
 # Rename sheet names and create workbook with repective sheet names
 #------------------------------------------------------------------------------
 # Rename sheets 
-'''
-Question: Is alsways an underscore used?
-'''
-
 renamed_all_sheets = pv.rename_all_sheets(names_all_sheets,\
                                           index_cov_sheets,\
                                           index_unfil_sheets,\
