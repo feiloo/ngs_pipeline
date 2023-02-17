@@ -7,9 +7,9 @@ we target an unimpeded integration experience for new diagnosis methods.
 success will be indicated through a low time and engineering effort when deploying new diagnosis.
 
 in the next few months, we want to have an automatic workflow containing:
-    * liftover/remap
-    * ensembleorg/vep
-    * copy number variation analysis
+* liftover/remap
+* ensembleorg/vep
+* copy number variation analysis
     
 this project is mostly for documentation, but secondly aimed at bioinformatic clinicians, researchers and brave developers wanting to run their own pipeline.
 
@@ -52,10 +52,10 @@ meson --reconfigure /tmp/builddir
 ### dependencies
 
 pip:
-meson
-python
-miniwdl
+* meson
+* python
+* miniwdl
 
 zypper:
-ninja
-plantuml
+* ninja
+* plantuml
