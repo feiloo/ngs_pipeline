@@ -127,8 +127,6 @@ class SequencerInputSample(BaseDocument):
     final: bool = False
     repetition: bool = False
 
-
-
 class TrackingForm(BaseDocument):
     document_type: str = 'tracking_form'
     created_time: datetime
@@ -142,19 +140,25 @@ class MolYearNumber(BaseModel):
 class Examination(BaseModel):
     ''' medical examination/case '''
     examinationtype: str
+    examination_requester: Literal['internal', 'external']
+    started_date: datetime
+    sequencer_run: SequencerRun
+    pipeline_run: List[PipelineRun]
 
 class Person(BaseModel):
     name: str
     surname: str
 
 class Patient(Person):
-    mp_nr: str
+    #mp_nr: str
     examinations: List[Examination]
     birthdate: datetime
     gender: str
 
 class Pathologist(Person):
-    name: str
+    short_name: str
+
+class Clinition(Person):
     short_name: str
 
 class Result(BaseModel):

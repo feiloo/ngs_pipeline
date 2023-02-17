@@ -54,32 +54,87 @@ def setup_periodic_tasks(sender, **kwargs):
     sig = start_pipeline.signature(args=(config,))
     sender.add_periodic_task(300.0, sig, name='start pipeline every 300s')
 
-    #sender.add_periodic_task(300.0, sig, name='sync filemaker to couchdb')
+    # sender.add_periodic_task(300.0, sig, name='sync filemaker to couchdb')
     # Executes every day at midnight
     '''
     sender.add_periodic_task(
         crontab(hour=0, minute=0, day_of_week='*'),
-        test.s('Happy Mondays!'),
+        #test.s('Happy Mondays!'),
+
     )
     '''
 
 
 @mq.task
 def sync_couchdb_to_filemaker(config):
-    app_db = get_db(get_db_url(config))
+    #app_db = get_db(get_db_url(config))
 
-    for i in range(2):
-        # backoff for a few seconds
-        time.sleep(5)
-        resp = filemaker.get_all_records(offset=i*1000+1)
-        print(resp)
-        recs = resp['data']
-        print('s couch', len(recs))
-        for i,r in enumerate(recs):
-            d = r['fieldData']
-            d['document_type']='filemaker_record'
-            app_db.save(d)
-            print(f"saved {i}")
+    url = get_db_url(config)
+    server = couch.Server(url)
+    try:
+        server.delete('filemaker_mirror')
+    except:
+        pass
+
+    server.create('filemaker_mirror')
+    db = server.database('filemaker_mirror')
+
+    st = time.time()
+    timeout = 2*60*60 # 2h in seconds
+    while 1:
+        try:
+            # backoff for a few seconds
+            time.sleep(5)
+            resp = filemaker.get_all_records(offset=i*1000+1)
+            print(resp)
+            recs = resp['data']
+            print('s couch', len(recs))
+            for i,r in enumerate(recs):
+                d = r['fieldData']
+                d['document_type']='filemaker_record'
+                db.save(d)
+                print(f"saved {i}")
+
+            if time.time() > (st + timeout):
+                raise RuntimeError('database sync timed out')
+        except:
+            print(f'cant export with offset {i} or database timed out')
+            break
+
+@mq.task
+def transform_data(config):
+    try: 
+        server.delete('patient_history')
+    except:
+        pass
+
+    server.create('patient_data')
+    db = server.database('patient_data')
+    fmdb = server.database('filemaker_mirror')
+
+    filemaker_map_fn = '''
+    function (doc) {
+        emit(doc.Name, doc);
+        }
+    '''
+
+    filemaker_reduce_fn = '''
+    function (keys, values, rereduce) {
+      var vals = [];
+      if (rereduce) {
+	for(i=0;i<values.length;i++){
+	  vals.push(values);
+	}
+	return vals;
+      } else {
+	return values;
+      }
+    }
+    '''
+
+    for doc in fmdb.temporary_query(filemaker_map_fn):
+        d = doc
+        d.pop('_rev')
     
 
 @mq.task

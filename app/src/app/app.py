@@ -56,8 +56,7 @@ def _get_pipeline_dashboard_html():
     
     sequencer_runs = list(get_db(current_app).query('sequencer_runs/all'))
     r = [x['key'] for x in sequencer_runs]
-    #print(r)
-    sync_couchdb_to_filemaker.apply_async(args=(dict(current_app.config['data']),))
+    #sync_couchdb_to_filemaker.apply_async(args=(dict(current_app.config['data']),))
 
     return render_template('pipeline_dashboard.html', 
             pipeline_version=PIPELINE_VERSION,
@@ -221,6 +220,14 @@ def setup_views(app_db):
         emit(doc, 1);
         }
     '''
+
+    filemaker_map_fn = '''
+    function (doc) {
+      if(doc.document_type == 'filemaker_record')
+        emit(doc, 1);
+        }
+    '''
+
     response = app_db.save(
         {
             "_id": '_design/sequencer_runs', 
@@ -248,6 +255,16 @@ def setup_views(app_db):
                 'all':{"map":pipeline_map_fn}
                 }
         })
+
+    response = app_db.save(
+        {
+            "_id": '_design/filemaker', 
+            'views':
+            {
+            'all':{"map":filemaker_map_fn},
+            }
+        }
+        )
 
 def create_app(config):
     app = Flask(__name__)
