@@ -20,6 +20,7 @@ from app.model import panel_types, SequencerInputSample, TrackingForm, Examinati
 from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.tasks import mq, start_pipeline, get_celery_config, sync_couchdb_to_filemaker
+from app.db_utils import setup_views
 #from app.filemaker_api import get_new_records
 
 import pycouchdb
@@ -201,70 +202,6 @@ def get_db(app):
 
     return g.app_db
 
-def setup_views(app_db):
-    sequencer_map_fn = '''
-    function (doc) {
-      if(doc.document_type == 'sequencer_run')
-        emit(doc, 1);
-        }
-    '''
-    sample_map_fn = '''
-    function (doc) {
-      if(doc.document_type == 'sample')
-        emit(doc, 1);
-        }
-    '''
-    pipeline_map_fn = '''
-    function (doc) {
-      if(doc.document_type == 'pipeline_run')
-        emit(doc, 1);
-        }
-    '''
-
-    filemaker_map_fn = '''
-    function (doc) {
-      if(doc.document_type == 'filemaker_record')
-        emit(doc, 1);
-        }
-    '''
-
-    response = app_db.save(
-        {
-            "_id": '_design/sequencer_runs', 
-            'views':
-            {
-            'all':{"map":sequencer_map_fn},
-            }
-        }
-        )
-
-    response = app_db.save(
-        {
-            "_id":'_design/samples', 
-            'views':
-                {
-                'all':{"map":sample_map_fn}
-                }
-        })
-
-    response = app_db.save(
-        {
-            "_id":'_design/pipeline_runs', 
-            'views':
-                {
-                'all':{"map":pipeline_map_fn}
-                }
-        })
-
-    response = app_db.save(
-        {
-            "_id": '_design/filemaker', 
-            'views':
-            {
-            'all':{"map":filemaker_map_fn},
-            }
-        }
-        )
 
 def create_app(config):
     app = Flask(__name__)

@@ -2,6 +2,7 @@ from typing import Optional, Literal, List
 from datetime import datetime
 from pathlib import Path
 from pydantic import BaseModel
+from uuid import UUID
 import json
 
 # some runs are missing information because of device or network failure
@@ -55,7 +56,7 @@ filemaker_examination_types = [
 
 
 class BaseDocument(BaseModel):
-    id: Optional[str]
+    id: UUID
     rev: Optional[str]
     data_model_version: str = DATA_MODEL_VERSION
     document_type: str
@@ -84,14 +85,17 @@ class PipelineLogs(BaseModel):
     stdout: str
     stderr: str
 
+
 class PipelineRun(BaseDocument):
     document_type: str = 'pipeline_run'
     created_time: datetime
     input_samples: List[Path]
     workflow: str
-    sequencer_run: Path
+    sequencer_run_path: Path
+    sequencer_run_id: UUID
     status: str
     logs: PipelineLogs
+
 
 class SequencerRun(BaseDocument):
     document_type: str = 'sequencer_run'
@@ -140,10 +144,10 @@ class MolYearNumber(BaseModel):
 class Examination(BaseModel):
     ''' medical examination/case '''
     examinationtype: str
-    examination_requester: Literal['internal', 'external']
+    #examination_requester: Union[Literal['internal'], str]
     started_date: datetime
-    sequencer_run: SequencerRun
-    pipeline_run: List[PipelineRun]
+    sequencer_runs: List[UUID]
+    pipeline_runs: List[UUID]
 
 class Person(BaseModel):
     name: str
@@ -158,7 +162,7 @@ class Patient(Person):
 class Pathologist(Person):
     short_name: str
 
-class Clinition(Person):
+class Clinitian(Person):
     short_name: str
 
 class Result(BaseModel):

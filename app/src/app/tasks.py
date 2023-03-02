@@ -16,6 +16,9 @@ from app.model import SequencerRun, PipelineRun
 
 from app.constants import testconfig
 from app.filemaker_api import Filemaker
+from app.db_utils import clean_init_filemaker_mirror
+from app.parsers import parse_date
+from uuid import UUID, uuid4
 
 
 def get_celery_config(config):
@@ -67,17 +70,7 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @mq.task
 def sync_couchdb_to_filemaker(config):
-    #app_db = get_db(get_db_url(config))
-
-    url = get_db_url(config)
-    server = couch.Server(url)
-    try:
-        server.delete('filemaker_mirror')
-    except:
-        pass
-
-    server.create('filemaker_mirror')
-    db = server.database('filemaker_mirror')
+    db = get_db(get_db_url(config))
 
     st = time.time()
     timeout = 2*60*60 # 2h in seconds
@@ -86,9 +79,7 @@ def sync_couchdb_to_filemaker(config):
             # backoff for a few seconds
             time.sleep(5)
             resp = filemaker.get_all_records(offset=i*1000+1)
-            print(resp)
             recs = resp['data']
-            print('s couch', len(recs))
             for i,r in enumerate(recs):
                 d = r['fieldData']
                 d['document_type']='filemaker_record'
@@ -101,41 +92,31 @@ def sync_couchdb_to_filemaker(config):
             print(f'cant export with offset {i} or database timed out')
             break
 
+    return db
+
+
+
 @mq.task
 def transform_data(config):
-    try: 
-        server.delete('patient_history')
-    except:
-        pass
+    app_db = get_db(get_db_url(config))
 
-    server.create('patient_data')
-    db = server.database('patient_data')
-    fmdb = server.database('filemaker_mirror')
+    for doc in app_db.query('filemaker/all'):
+        exam = model.Examination(
+                examinationtype=doc['Untersuchung'], 
+                started_date=parse_date(doc['Zeitstempel']),
+                sequencer_run=[],
+                pipeline_runs=[]
+                )
+        app_db.save(exam.to_dict())
 
-    filemaker_map_fn = '''
-    function (doc) {
-        emit(doc.Name, doc);
-        }
-    '''
 
-    filemaker_reduce_fn = '''
-    function (keys, values, rereduce) {
-      var vals = [];
-      if (rereduce) {
-	for(i=0;i<values.length;i++){
-	  vals.push(values);
-	}
-	return vals;
-      } else {
-	return values;
-      }
-    }
-    '''
+@mq.task
+def poll_new_cases(app_db, config):
+    app_db = get_db(get_db_url(config))
 
-    for doc in fmdb.temporary_query(filemaker_map_fn):
-        d = doc
-        d.pop('_rev')
-    
+    new_cases = app_db.query('examinations/new_examinations')
+    return new_cases
+
 
 @mq.task
 def poll_sequencer_output(app_db, config):
@@ -162,6 +143,11 @@ def poll_sequencer_output(app_db, config):
 
         if str(run_name) in sequencer_paths:
             continue
+
+        # todo
+        mp_number = parsed['run_name']
+        year = datetime.now().year
+        panel_type = app_db.query(f'examinations/mp_number?key=[year,mp_number]')
 
         run_document = {
                 'document_type':'sequencer_run',
