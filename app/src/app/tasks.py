@@ -113,6 +113,7 @@ def transform_data(config):
 @mq.task
 def poll_new_cases(app_db, config):
     app_db = get_db(get_db_url(config))
+    transform_data(config)
 
     new_cases = app_db.query('examinations/new_examinations')
     return new_cases
@@ -135,8 +136,6 @@ def poll_sequencer_output(app_db, config):
             parsed = {}
             dirty=True
 
-        #panel_type = infer_panel_type(samplesheet)
-
         # run folder name doesnt adhere to illumina naming convention
         # because it has been renamed or manually copied
         # we save the parsed information too, so we can efficiently query the runs
@@ -144,24 +143,25 @@ def poll_sequencer_output(app_db, config):
         if str(run_name) in sequencer_paths:
             continue
 
-        # todo
-        mp_number = parsed['run_name']
-        year = datetime.now().year
-        panel_type = app_db.query(f'examinations/mp_number?key=[year,mp_number]')
 
         run_document = {
+                'id': str(uuid4()),
                 'document_type':'sequencer_run',
                 'original_path':Path(run_name), 
                 'name_dirty':str(dirty), 
                 'parsed':parsed, 
                 'state': 'successful',
-                'panel_type': 'unset', 
                 'indexed_time':datetime.now()
                 }
 
+
+        #'panel_type': panel_type,
+
+        # this validates the fields
         sequencer_run = SequencerRun(**run_document)
-        #runs.append(run_document)
-        app_db.save(json.loads(sequencer_run.json()))
+        #app_db.save(json.loads(sequencer_run.json()))
+        app_db.save(sequencer_run.to_dict())
+
 
 
 def get_db_url(config):
@@ -193,8 +193,8 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
     #workflow = '/data/ngs_pipeline/workflow/wdl/clc_test.wdl'
     #workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
 
-    if panel_type == 'unset':
-        print('info, panel type not set, skipping')
+    if panel_type == 'invalid':
+        print('info, panel type invalid skipping')
         return
 
     workflow = workflows[panel_type]
@@ -291,18 +291,22 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
 
 @mq.task
 def start_pipeline(config):
+    '''
+    this loads the sequencer output files into the database
+    compares if every sequencer run has an according pipeline run by the folder path
+
+    if not, it runs the pipeline for the missing ones
+    '''
+
     app_db = get_db(get_db_url(config))
 
     poll_sequencer_output(app_db, config)
-
-    miseq_output_folder = config['miseq_output_folder']
 
     sequencer_runs = list(app_db.query('sequencer_runs/all'))
     pipeline_runs = list(app_db.query('pipeline_runs/all'))
 
     sequencer_run_ids = set([str(Path(r['key']['original_path']).name) for r in sequencer_runs])
     pipeline_run_refs = set([str(Path(r['key']['sequencer_run']).name) for r in pipeline_runs])
-
     new_run_ids = sequencer_run_ids - pipeline_run_refs
 
     new_runs = list(filter(
@@ -313,19 +317,47 @@ def start_pipeline(config):
     if len(new_runs) == 0:
         print('no new runs')
         return
+    else:
+        print(f'found {len(new_runs)} new runs')
 
     for new_run in new_runs:
         if new_run['key']['state'] != 'successful':
             continue
 
-        workflow_inputs = []
-        mp_numbers = []
+        print(f"starting pipeline for sequencer run {new_run['key']['original_path']}")
+        year_str = new_run['key']['parsed']['date']
 
-        for sample_path in (Path(miseq_output_folder) / Path(new_run['key']['original_path']).name).rglob('*.fastq.gz'):
+        def parse_year(year_str):
+            y = datetime.strptime(year_str, '%y%m%d')
+            return y
+
+        year = parse_year(year_str).year
+
+        samples = []
+
+        for sample_path in (Path(config['miseq_output_folder']) / Path(new_run['key']['original_path']).name).rglob('*.fastq.gz'):
             try:
-                #mp_numbers.append(get_mp_number_from_path(str(sample_path)))
-                workflow_inputs.append(sample_path)
+                mp_number_with_year = get_mp_number_from_path(str(sample_path))
+                mp_number, mp_year = mp_number_with_year.split('-')
+                #assert year == mp_year
+
+                samples.append({'path':sample_path, 'mp_number': mp_number})
             except Exception as e:
                 print(f'error: {e}')
+                continue
+            #print(samples)
+
+            #get the panel type of the examination the sample belongs to
+            p = list(app_db.query(f'mp_number/mp_number?key=[{year},{mp_number}]'))
+            print(sample_path)
+            print(mp_number)
+            print(p)
+
+            if len(p) != 1:
+                panel_type = 'invalid'
+            else:
+                panel_type = p[0]
+
+            print(panel_type)
         
-        start_run(config, workflow_inputs, new_run['key']['panel_type'], new_run['key']['original_path'])
+        #start_run(config, workflow_inputs, new_run['key']['panel_type'], new_run['key']['original_path'])

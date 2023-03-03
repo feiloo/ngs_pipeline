@@ -13,7 +13,7 @@ DATA_MODEL_VERSION = '0.0.1'
 
 # based on the ordercodes of "NGS_Panel_Abdeckung_MolPath.docx"
 panel_types = [
-        'unset', 
+        'invalid', 
         'NGS DNA Lungenpanel', 
         'NGS oncoHS', 
         'NGS BRCAness', 
@@ -22,7 +22,7 @@ panel_types = [
         'NGS PanCancer'
         ]
 PanelType = Literal[
-        'unset', 
+        'invalid', 
         'NGS DNA Lungenpanel', 
         'NGS oncoHS', 
         'NGS BRCAness', 
@@ -56,7 +56,7 @@ filemaker_examination_types = [
 
 
 class BaseDocument(BaseModel):
-    id: UUID
+    id: str
     rev: Optional[str]
     data_model_version: str = DATA_MODEL_VERSION
     document_type: str
@@ -72,7 +72,7 @@ class BaseDocument(BaseModel):
             d['_rev'] = self.rev
         return d
 
-    def from_dict(self, d):
+    def from_dict(self, d, ):
         if '_id' in d:
             d['id'] = d.pop('_id')
         if '_rev' in d:
@@ -104,9 +104,6 @@ class SequencerRun(BaseDocument):
     parsed: dict
     indexed_time: datetime
     state: str = 'unfinished'
-    # a targeted sequencer run, is always related to a single type of diagnostic panel
-    # this is needed to later choose the right workflow
-    panel_type: PanelType
 
 
 class SampleBlock(BaseDocument):
@@ -143,6 +140,7 @@ class MolYearNumber(BaseModel):
 
 class Examination(BaseModel):
     ''' medical examination/case '''
+    document_type: str = 'examination'
     examinationtype: str
     #examination_requester: Union[Literal['internal'], str]
     started_date: datetime

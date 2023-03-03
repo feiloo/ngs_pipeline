@@ -73,6 +73,28 @@ def setup_views(app_db):
             }
     }
     '''
+    examinations_mp_number = '''
+    function (doc) {
+	  const u = [
+	    'DNA Lungenpanel Qiagen - kein nNGM Fall',
+	    'DNA Panel ONCOHS',
+	    'DNA PANEL ONCOHS (Mamma)',
+	    'DNA PANEL ONCOHS (Melanom)',
+	    'DNA PANEL ONCOHS (Colon)',
+	    'DNA PANEL ONCOHS (GIST)',
+	    'DNA PANEL 522',
+	    'DNA PANEL Multimodel PanCancer DNA',
+	    'DNA PANEL Multimodel PanCancer RNA',
+	    'NNGM Lunge Qiagen',
+	    'RNA Fusion Lunge',
+	    'RNA Sarkompanel'
+	    ];
+
+	if (doc.document_type && (doc.document_type === 'filemaker_record') && u.includes(doc.Untersuchung)){
+	    emit([doc.Jahr, doc.Mol_NR], doc.Untersuchung);
+	  }
+	}
+    '''
 
 
     response = app_db.save(

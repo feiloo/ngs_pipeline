@@ -57,6 +57,7 @@ def _get_pipeline_dashboard_html():
     
     sequencer_runs = list(get_db(current_app).query('sequencer_runs/all'))
     r = [x['key'] for x in sequencer_runs]
+
     #sync_couchdb_to_filemaker.apply_async(args=(dict(current_app.config['data']),))
 
     return render_template('pipeline_dashboard.html', 
@@ -169,7 +170,7 @@ def stop_pipeline():
 def save_panel_type():
     sequencer_run_id = request.args.get('run_id')
     run = get_db(current_app).get(sequencer_run_id)
-    if run['panel_type'] != 'unset':
+    if run['panel_type'] != 'invalid':
         print('error panel_type is already set')
     else:
         run['panel_type'] = request.form['panel_type']
