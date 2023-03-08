@@ -92,7 +92,7 @@ class PipelineRun(BaseDocument):
     input_samples: List[Path]
     workflow: str
     sequencer_run_path: Path
-    sequencer_run_id: UUID
+    sequencer_run_id: str
     status: str
     logs: PipelineLogs
 
@@ -138,23 +138,25 @@ class MolYearNumber(BaseModel):
     molnumber: int
     molyear: int
 
-class Examination(BaseModel):
+class Examination(BaseDocument):
     ''' medical examination/case '''
     document_type: str = 'examination'
     examinationtype: str
     #examination_requester: Union[Literal['internal'], str]
     started_date: datetime
-    sequencer_runs: List[UUID]
-    pipeline_runs: List[UUID]
+    sequencer_runs: List[str]
+    pipeline_runs: List[str]
+    filemaker_record: Optional[str]
 
-class Person(BaseModel):
-    name: str
-    surname: str
+    
+class Person(BaseDocument):
+    names: List[str]
 
 class Patient(Person):
+    document_type: str = 'patient'
     #mp_nr: str
     examinations: List[Examination]
-    birthdate: datetime
+    birthdate: Optional[datetime]
     gender: str
 
 class Pathologist(Person):

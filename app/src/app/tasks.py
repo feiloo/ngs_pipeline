@@ -12,7 +12,7 @@ import json
 logger = logging.getLogger(__name__)
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name
-from app.model import SequencerRun, PipelineRun
+from app.model import SequencerRun, PipelineRun, Examination, Patient
 
 from app.constants import testconfig
 from app.filemaker_api import Filemaker
@@ -52,6 +52,15 @@ def get_db(url):
     app_db = server.database('ngs_app')
     return app_db
 
+
+def get_db_url(config):
+    user = config['couchdb_user']
+    psw = config['couchdb_psw']
+    host = 'localhost'
+    port = 5984
+    url = f"http://{user}:{psw}@{host}:{port}"
+    return url
+
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sig = start_pipeline.signature(args=(config,))
@@ -74,11 +83,12 @@ def sync_couchdb_to_filemaker(config):
 
     st = time.time()
     timeout = 2*60*60 # 2h in seconds
+    off = 0
     while 1:
         try:
             # backoff for a few seconds
             time.sleep(5)
-            resp = filemaker.get_all_records(offset=i*1000+1)
+            resp = filemaker.get_all_records(offset=off*1000+1)
             recs = resp['data']
             for i,r in enumerate(recs):
                 d = r['fieldData']
@@ -88,9 +98,11 @@ def sync_couchdb_to_filemaker(config):
 
             if time.time() > (st + timeout):
                 raise RuntimeError('database sync timed out')
-        except:
-            print(f'cant export with offset {i} or database timed out')
+        except Exception as e:
+            print(f'cant export with offset {i} or database timed out with error: {e}')
             break
+
+        off += 1
 
     return db
 
@@ -100,15 +112,55 @@ def sync_couchdb_to_filemaker(config):
 def transform_data(config):
     app_db = get_db(get_db_url(config))
 
-    for doc in app_db.query('filemaker/all'):
-        exam = model.Examination(
-                examinationtype=doc['Untersuchung'], 
-                started_date=parse_date(doc['Zeitstempel']),
-                sequencer_run=[],
-                pipeline_runs=[]
-                )
-        app_db.save(exam.to_dict())
+    k = None
+    exams = []
+    for doc in app_db.query('patients/patients'):
+        if k is None:
+            k = doc['key']
 
+        d = doc['value']
+
+        if doc['key'] == k:
+            uid = str(uuid4())
+
+            exam = Examination(
+                    id=uid,
+                    examinationtype=d['Untersuchung'], 
+                    started_date=parse_date(d['Zeitstempel']),
+                    sequencer_runs=[],
+                    pipeline_runs=[],
+                    filemaker_record=str(d['_id'])
+                    )
+            exams.append(exam)
+
+        else:
+            try:
+                birthdate = datetime.strptime(d['GBD'], '%m/%d/%Y'),
+
+                patient = Patient(
+                    id=str(uuid4()),
+                    names=[f'{d["Vorname"], d["Name"]}'],
+                    birthdate=birthdate,
+                    gender=d['Geschlecht'],
+                    examinations=[e for e in exams],
+                    )
+            except Exception as e:
+                print(e)
+
+                patient = Patient(
+                    id=str(uuid4()),
+                    names=[f'{d["Vorname"], d["Name"]}'],
+                    gender=d['Geschlecht'],
+                    examinations=[e for e in exams],
+                    )
+
+            app_db.save(patient.to_dict())
+
+            for e in exams:
+                app_db.save(e.to_dict())
+
+            k = doc['key']
+            exams = []
 
 @mq.task
 def poll_new_cases(app_db, config):
@@ -143,7 +195,6 @@ def poll_sequencer_output(app_db, config):
         if str(run_name) in sequencer_paths:
             continue
 
-
         run_document = {
                 'id': str(uuid4()),
                 'document_type':'sequencer_run',
@@ -163,15 +214,6 @@ def poll_sequencer_output(app_db, config):
         app_db.save(sequencer_run.to_dict())
 
 
-
-def get_db_url(config):
-    user = config['couchdb_user']
-    psw = config['couchdb_psw']
-    host = 'localhost'
-    port = 5984
-    url = f"http://{user}:{psw}@{host}:{port}"
-    return url
-
 def get_mp_number_from_path(p):
     d = parse_fastq_name(Path(p).name)
     return d['sample_name']
@@ -180,6 +222,21 @@ def get_mp_number_from_path(p):
 def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
     app_db = get_db(get_db_url(config))
 
+    filemaker_examination_types_workflow_mapping = {
+            'DNA Lungenpanel Qiagen - kein nNGM Fall':'NGS DNA Lungenpanel',
+            'DNA Panel ONCOHS': 'NGS oncoHS',
+            'DNA PANEL ONCOHS (Mamma)': 'NGS oncoHS', # basically calls ONCOHS,
+            'DNA PANEL ONCOHS (Melanom)': 'NGS oncoHS',# basically calls ONCOHS
+            'DNA PANEL ONCOHS (Colon)': 'NGS oncoHS',# basically calls ONCOHS
+            'DNA PANEL ONCOHS (GIST)': 'NGS oncoHS',# basically calls ONCOHS
+            'DNA PANEL 522': None, # research panel
+            'DNA PANEL Multimodel PanCancer DNA': None,
+            'DNA PANEL Multimodel PanCancer RNA': None,
+            'NNGM Lunge Qiagen': None,
+            'RNA Fusion Lunge': 'NGS RNA Fusion Lunge',
+            'RNA Sarkompanel': None,
+            }
+
     workflows = {
         'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/test.wdl',
         'NGS oncoHS' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
@@ -187,7 +244,9 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
         'NGS RNA Sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
         'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/test.wdl',
         'NGS PanCancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        None: None,
         }
+
 
     #workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
     #workflow = '/data/ngs_pipeline/workflow/wdl/clc_test.wdl'
@@ -197,7 +256,13 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
         print('info, panel type invalid skipping')
         return
 
-    workflow = workflows[panel_type]
+    workflow_type = filemaker_examination_types_workflow_mapping[panel_type]
+    print(f"workflow type: {workflow_type}")
+    workflow = workflows[workflow_type]
+
+    if workflow is None:
+        print('panel skipped')
+        return
 
     pipeline_document = {
             'document_type':'pipeline_run',
@@ -213,9 +278,11 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
             }
 
     pipeline_run = PipelineRun(
+            id=str(uuid4()),
             created_time=datetime.now(),
             input_samples=[str(x) for x in workflow_inputs],
-            sequencer_run=Path(sequencer_run_path),
+            sequencer_run_path=Path(sequencer_run_path),
+            sequencer_run_id='',
             workflow=workflow,
             status='running',
             logs={
@@ -225,11 +292,13 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
             )
 
     def db_save(pipeline_run):
+        print(pipeline_run)
         pr = app_db.save(pipeline_run.to_dict())
         return pipeline_run.from_dict(pr)
-        
 
     pipeline_run = db_save(pipeline_run)
+    exam = app_db.query('examinations/examination_fm_join')
+    p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
 
     try:
         output_dir = '/data/fhoelsch/wdl_out'
@@ -306,7 +375,7 @@ def start_pipeline(config):
     pipeline_runs = list(app_db.query('pipeline_runs/all'))
 
     sequencer_run_ids = set([str(Path(r['key']['original_path']).name) for r in sequencer_runs])
-    pipeline_run_refs = set([str(Path(r['key']['sequencer_run']).name) for r in pipeline_runs])
+    pipeline_run_refs = set([str(Path(r['key']['sequencer_run_path']).name) for r in pipeline_runs])
     new_run_ids = sequencer_run_ids - pipeline_run_refs
 
     new_runs = list(filter(
@@ -345,19 +414,22 @@ def start_pipeline(config):
             except Exception as e:
                 print(f'error: {e}')
                 continue
-            #print(samples)
 
-            #get the panel type of the examination the sample belongs to
-            p = list(app_db.query(f'mp_number/mp_number?key=[{year},{mp_number}]'))
-            print(sample_path)
-            print(mp_number)
-            print(p)
+            #get the the examination the sample belongs to
+            p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+            #print(sample_path)
+            #print(mp_number)
+            #print(p)
 
             if len(p) != 1:
                 panel_type = 'invalid'
             else:
-                panel_type = p[0]
+                panel_type = p[0]['value']['examinationtype']
 
             print(panel_type)
+            workflow_inputs = [Path(sample_path)]
         
-        #start_run(config, workflow_inputs, new_run['key']['panel_type'], new_run['key']['original_path'])
+            if panel_type == 'invalid':
+                continue
+
+            start_run(config, workflow_inputs, panel_type, new_run['key']['original_path'])

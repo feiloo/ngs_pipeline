@@ -52,8 +52,18 @@ def setup_views(app_db):
     filemaker_map_fn = '''
     function (doc) {
       if(doc.document_type == 'filemaker_record')
-        emit(doc, 1);
+        emit(doc._id, doc);
         }
+    '''
+
+    examinations = '''
+    function (doc) {
+      if(doc.document_type){
+	if(doc.document_type == 'examination'){
+	  emit(doc._id, doc);
+	}
+      }
+    }
     '''
 
     examinations_new_cases = '''
@@ -68,13 +78,6 @@ def setup_views(app_db):
 
     examinations_mp_number = '''
     function (doc) {
-      if (doc.document_type == 'filemaker_record'){
-          emit([doc.Jahr, doc.Mol_NR], doc.Untersuchung);
-            }
-    }
-    '''
-    examinations_mp_number = '''
-    function (doc) {
 	  const u = [
 	    'DNA Lungenpanel Qiagen - kein nNGM Fall',
 	    'DNA Panel ONCOHS',
@@ -82,7 +85,6 @@ def setup_views(app_db):
 	    'DNA PANEL ONCOHS (Melanom)',
 	    'DNA PANEL ONCOHS (Colon)',
 	    'DNA PANEL ONCOHS (GIST)',
-	    'DNA PANEL 522',
 	    'DNA PANEL Multimodel PanCancer DNA',
 	    'DNA PANEL Multimodel PanCancer RNA',
 	    'NNGM Lunge Qiagen',
@@ -91,10 +93,19 @@ def setup_views(app_db):
 	    ];
 
 	if (doc.document_type && (doc.document_type === 'filemaker_record') && u.includes(doc.Untersuchung)){
-	    emit([doc.Jahr, doc.Mol_NR], doc.Untersuchung);
+	    emit([doc.Jahr, doc.Mol_NR], doc);
 	  }
 	}
     '''
+
+    patient_map_fn = '''
+    function (doc) {
+      if(doc.document_type == 'filemaker_record'){
+        emit([doc.Name, doc.Vorname, doc.GBD], doc);
+        }
+    }
+    '''
+
 
 
     response = app_db.save(
@@ -139,7 +150,17 @@ def setup_views(app_db):
             "_id": '_design/examinations', 
             'views':
             {
-            'new_examinations':{"map":filemaker_map_fn},
-            'mp_number':{"map":filemaker_map_fn},
+            'new_examinations':{"map":examinations_new_cases},
+            'examinations':{"map":examinations},
+            'mp_number':{"map":examinations_mp_number},
+            }
+        })
+
+    response = app_db.save(
+        {
+            "_id": '_design/patients', 
+            'views':
+            {
+            'patients':{"map":patient_map_fn},
             }
         })

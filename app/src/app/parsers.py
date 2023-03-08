@@ -41,4 +41,5 @@ def parse_miseq_run_name(name):
 #d = parse_miseq_run_name(miseq_name_example)
 #date = datetime.strptime(d['date'],'%y%m%d')
 def parse_date(datestr):
-    return datetime.strptime(datestr, '%d/%m/%Y')
+    #return datetime.strptime(datestr, '%d/%m/%Y')
+    return datetime.strptime(datestr, '%m/%d/%Y')
