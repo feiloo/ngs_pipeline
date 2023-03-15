@@ -21,6 +21,7 @@ panel_types = [
         'NGS RNA Fusion Lunge', 
         'NGS PanCancer'
         ]
+
 PanelType = Literal[
         'invalid', 
         'NGS DNA Lungenpanel', 
@@ -146,8 +147,7 @@ class Examination(BaseDocument):
     started_date: datetime
     sequencer_runs: List[str]
     pipeline_runs: List[str]
-    filemaker_record: Optional[str]
-
+    filemaker_record: Optional[dict]
     
 class Person(BaseDocument):
     names: List[str]
@@ -155,7 +155,7 @@ class Person(BaseDocument):
 class Patient(Person):
     document_type: str = 'patient'
     #mp_nr: str
-    examinations: List[Examination]
+    examinations: List[str]
     birthdate: Optional[datetime]
     gender: str
 

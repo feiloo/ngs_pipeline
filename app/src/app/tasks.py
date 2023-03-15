@@ -12,7 +12,7 @@ import json
 logger = logging.getLogger(__name__)
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name
-from app.model import SequencerRun, PipelineRun, Examination, Patient
+from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
 
 from app.constants import testconfig
 from app.filemaker_api import Filemaker
@@ -112,9 +112,15 @@ def sync_couchdb_to_filemaker(config):
 def transform_data(config):
     app_db = get_db(get_db_url(config))
 
+    for p in app_db.query('patients/patients'):
+        app_db.delete(p['value']['_id'])
+
+    for p in app_db.query('examinations/examinations'):
+        app_db.delete(p['value']['_id'])
+
     k = None
     exams = []
-    for doc in app_db.query('patients/patients'):
+    for doc in app_db.query('patients/patient_aggregation'):
         if k is None:
             k = doc['key']
 
@@ -129,7 +135,7 @@ def transform_data(config):
                     started_date=parse_date(d['Zeitstempel']),
                     sequencer_runs=[],
                     pipeline_runs=[],
-                    filemaker_record=str(d['_id'])
+                    filemaker_record=d
                     )
             exams.append(exam)
 
@@ -142,7 +148,7 @@ def transform_data(config):
                     names=[f'{d["Vorname"], d["Name"]}'],
                     birthdate=birthdate,
                     gender=d['Geschlecht'],
-                    examinations=[e for e in exams],
+                    examinations=[e.id for e in exams],
                     )
             except Exception as e:
                 print(e)
@@ -151,7 +157,7 @@ def transform_data(config):
                     id=str(uuid4()),
                     names=[f'{d["Vorname"], d["Name"]}'],
                     gender=d['Geschlecht'],
-                    examinations=[e for e in exams],
+                    examinations=[e.id for e in exams],
                     )
 
             app_db.save(patient.to_dict())
@@ -220,6 +226,8 @@ def get_mp_number_from_path(p):
 
 
 def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
+    print(f'starting run: {sequencer_run_path}')
+
     app_db = get_db(get_db_url(config))
 
     filemaker_examination_types_workflow_mapping = {
@@ -238,11 +246,11 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
             }
 
     workflows = {
-        'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
         'NGS oncoHS' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
         'NGS BRCAness': '/data/ngs_pipeline/workflow/wdl/test.wdl',
         'NGS RNA Sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-        'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+        'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
         'NGS PanCancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
         None: None,
         }
@@ -297,8 +305,8 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
         return pipeline_run.from_dict(pr)
 
     pipeline_run = db_save(pipeline_run)
-    exam = app_db.query('examinations/examination_fm_join')
-    p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+    #exam = app_db.query('examinations/examination_fm_join')
+    #p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
 
     try:
         output_dir = '/data/fhoelsch/wdl_out'
@@ -376,7 +384,8 @@ def start_pipeline(config):
 
     sequencer_run_ids = set([str(Path(r['key']['original_path']).name) for r in sequencer_runs])
     pipeline_run_refs = set([str(Path(r['key']['sequencer_run_path']).name) for r in pipeline_runs])
-    new_run_ids = sequencer_run_ids - pipeline_run_refs
+    #new_run_ids = sequencer_run_ids - pipeline_run_refs
+    new_run_ids = sequencer_run_ids 
 
     new_runs = list(filter(
         lambda x: str(Path(x['key']['original_path']).name) in new_run_ids, 
@@ -404,32 +413,59 @@ def start_pipeline(config):
 
         samples = []
 
-        for sample_path in (Path(config['miseq_output_folder']) / Path(new_run['key']['original_path']).name).rglob('*.fastq.gz'):
+        sample_paths = (
+                Path(config['miseq_output_folder']) 
+                / Path(new_run['key']['original_path']).name
+                ).rglob('*.fastq.gz')
+
+        for sample_path in sample_paths:
             try:
                 mp_number_with_year = get_mp_number_from_path(str(sample_path))
                 mp_number, mp_year = mp_number_with_year.split('-')
-                #assert year == mp_year
+                print(f'{year} {mp_year} {type(year)} {type(mp_year)} {year != mp_year}')
+                '''
+                if year != mp_year:
+                    raise RuntimeError('year in the examination record mismatches with the year of the samplename')
+                '''
 
-                samples.append({'path':sample_path, 'mp_number': mp_number})
+                #get the the examination the sample belongs to
+                p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+                print(sample_path)
+                print(mp_number)
+                print(p)
+
+                if len(p) != 1:
+                    panel_type = 'invalid'
+                else:
+                    panel_type = p[0]['value']['examinationtype']
+
+            
+                if panel_type == 'invalid':
+                    raise RuntimeError('panel type invalid')
+                    continue
+
+                samples.append({
+                    'path':sample_path, 
+                    'mp_number': mp_number, 
+                    'mp_year': mp_year,
+                    'panel_type': panel_type
+                    })
+
             except Exception as e:
                 print(f'error: {e}')
                 continue
 
-            #get the the examination the sample belongs to
-            p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
-            #print(sample_path)
-            #print(mp_number)
-            #print(p)
-
-            if len(p) != 1:
-                panel_type = 'invalid'
-            else:
-                panel_type = p[0]['value']['examinationtype']
-
-            print(panel_type)
-            workflow_inputs = [Path(sample_path)]
-        
+        for panel_type in filemaker_examination_types:
             if panel_type == 'invalid':
-                continue
+                continue 
+
+            workflow_inputs = list(map(
+                lambda s: Path(s['path']),
+                filter(
+                    lambda s: s['panel_type'] == panel_type,
+                    samples
+                    )
+                )
+            )
 
             start_run(config, workflow_inputs, panel_type, new_run['key']['original_path'])

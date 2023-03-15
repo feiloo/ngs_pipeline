@@ -17,6 +17,7 @@ dependencies = [
 "click",
 "pandas",
 "pydantic",
+"more_itertools",
 "miniwdl @ git+https://github.com/chanzuckerberg/miniwdl.git",
 "pytest-celery",
 ]

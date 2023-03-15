@@ -78,27 +78,36 @@ def setup_views(app_db):
 
     examinations_mp_number = '''
     function (doc) {
-	  const u = [
-	    'DNA Lungenpanel Qiagen - kein nNGM Fall',
-	    'DNA Panel ONCOHS',
-	    'DNA PANEL ONCOHS (Mamma)',
-	    'DNA PANEL ONCOHS (Melanom)',
-	    'DNA PANEL ONCOHS (Colon)',
-	    'DNA PANEL ONCOHS (GIST)',
-	    'DNA PANEL Multimodel PanCancer DNA',
-	    'DNA PANEL Multimodel PanCancer RNA',
-	    'NNGM Lunge Qiagen',
-	    'RNA Fusion Lunge',
-	    'RNA Sarkompanel'
-	    ];
-
-	if (doc.document_type && (doc.document_type === 'filemaker_record') && u.includes(doc.Untersuchung)){
-	    emit([doc.Jahr, doc.Mol_NR], doc);
-	  }
-	}
+      if (doc.document_type && (doc.document_type === 'examination')){
+	      const u = [
+		'DNA Lungenpanel Qiagen - kein nNGM Fall',
+		'DNA Panel ONCOHS',
+		'DNA PANEL ONCOHS (Mamma)',
+		'DNA PANEL ONCOHS (Melanom)',
+		'DNA PANEL ONCOHS (Colon)',
+		'DNA PANEL ONCOHS (GIST)',
+		'DNA PANEL Multimodel PanCancer DNA',
+		'DNA PANEL Multimodel PanCancer RNA',
+		'NNGM Lunge Qiagen',
+		'RNA Fusion Lunge',
+		'RNA Sarkompanel'
+		];
+	      if (u.includes(doc.filemaker_record.Untersuchung)){
+		emit([doc.filemaker_record.Jahr, doc.filemaker_record.Mol_NR], doc);
+	      }
+      }
+    }
     '''
 
     patient_map_fn = '''
+    function (doc) {
+      if(doc.document_type == 'patient'){
+        emit(doc._id, doc);
+        }
+    }
+    '''
+
+    patient_aggregation_fn = '''
     function (doc) {
       if(doc.document_type == 'filemaker_record'){
         emit([doc.Name, doc.Vorname, doc.GBD], doc);
@@ -161,6 +170,7 @@ def setup_views(app_db):
             "_id": '_design/patients', 
             'views':
             {
+            'patient_aggregation':{"map":patient_aggregation_fn},
             'patients':{"map":patient_map_fn},
             }
         })
