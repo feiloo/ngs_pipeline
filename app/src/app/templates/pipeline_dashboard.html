@@ -49,6 +49,20 @@ td {
   </div>
 
   <div>
+    <h2> Examinations </h2>
+	    <table> 
+	    <tr>
+		<th>Mol_NR</th>
+		<th>examinationtype</th>
+	    </tr>
+	    {% for exam in examinations %}
+	    <tr>
+		<td><nobr><data>{{ exam['filemaker_record']['Mol_NR'] }}<data></td>
+		<td><nobr><data>{{ exam['examinationtype'] }}<data></td>
+	    </tr>
+	    {% endfor %}
+	    </table>
+
     <h2> Sequencer Runs </h2>
 	    <table> 
 	    <tr>

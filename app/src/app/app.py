@@ -23,6 +23,8 @@ from app.tasks import mq, start_pipeline, get_celery_config, sync_couchdb_to_fil
 from app.db_utils import setup_views
 #from app.filemaker_api import get_new_records
 
+from more_itertools import chunked
+
 import pycouchdb
 
 APP_VERSION = '0.0.1'
@@ -58,8 +60,17 @@ def _get_pipeline_dashboard_html():
     sequencer_runs = list(get_db(current_app).query('sequencer_runs/all'))
     r = [x['key'] for x in sequencer_runs]
 
+    e = list(get_db(current_app).query('examinations/examinations?limit=10&skip=10'))
+
+    def unserialize(x):
+        d = x
+        d['filemaker_record'] = x['filemaker_record']
+        return d
+
+    examinations = [unserialize(x['value']) for x in e]
 
     return render_template('pipeline_dashboard.html', 
+            examinations=examinations,
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status='running',
