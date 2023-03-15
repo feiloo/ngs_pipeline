@@ -112,14 +112,31 @@ def sync_couchdb_to_filemaker(config):
 def transform_data(config):
     app_db = get_db(get_db_url(config))
 
+    deleted_docs = []
     for p in app_db.query('patients/patients'):
-        app_db.delete(p['value']['_id'])
+        #app_db.delete(p['value']['_id'])
+        deleted_docs.append(p['value'])
+
+    print(len(deleted_docs))
 
     for p in app_db.query('examinations/examinations'):
-        app_db.delete(p['value']['_id'])
+        #app_db.delete(p['value']['_id'])
+        deleted_docs.append(p['value'])
+
+    print(len(deleted_docs))
+
+    todelete = []
+    for d in deleted_docs:
+        doc = {'_id':d['_id'], '_rev':d['_rev'], 'deleted':True}
+        todelete.append(doc)
+
+    app_db.save_bulk(todelete)
 
     k = None
     exams = []
+
+    docs_to_save = []
+
     for doc in app_db.query('patients/patient_aggregation'):
         if k is None:
             k = doc['key']
@@ -160,13 +177,17 @@ def transform_data(config):
                     examinations=[e.id for e in exams],
                     )
 
-            app_db.save(patient.to_dict())
+            #app_db.save(patient.to_dict())
+            docs_to_save.append(patient.to_dict())
 
             for e in exams:
-                app_db.save(e.to_dict())
+                #app_db.save(e.to_dict())
+                docs_to_save.append(e.to_dict())
 
             k = doc['key']
             exams = []
+
+    app_db.save_bulk(docs_to_save)
 
 @mq.task
 def poll_new_cases(app_db, config):

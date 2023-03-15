@@ -32,28 +32,36 @@ def clean_init_filemaker_mirror():
 def setup_views(app_db):
     sequencer_map_fn = '''
     function (doc) {
-      if(doc.document_type == 'sequencer_run')
-        emit(doc, 1);
-        }
+      if(doc.document_type){
+        if(doc.document_type == 'sequencer_run')
+          emit(doc, 1);
+          }
+      }
     '''
     sample_map_fn = '''
     function (doc) {
-      if(doc.document_type == 'sample')
-        emit(doc, 1);
-        }
+      if(doc.document_type){
+        if(doc.document_type == 'sample')
+          emit(doc, 1);
+          }
+      }
     '''
     pipeline_map_fn = '''
     function (doc) {
-      if(doc.document_type == 'pipeline_run')
-        emit(doc, 1);
-        }
+      if(doc.document_type){
+        if(doc.document_type == 'pipeline_run')
+          emit(doc, 1);
+          }
+      }
     '''
 
     filemaker_map_fn = '''
     function (doc) {
-      if(doc.document_type == 'filemaker_record')
-        emit(doc._id, doc);
-        }
+      if(doc.document_type){
+        if(doc.document_type == 'filemaker_record')
+          emit(doc._id, doc);
+          }
+      }
     '''
 
     examinations = '''
