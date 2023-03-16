@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
 
-from app.constants import testconfig
+from app.constants import testconfig, filemaker_examination_types_workflow_mapping, workflow_paths
 from app.filemaker_api import Filemaker
 from app.db_utils import clean_init_filemaker_mirror
 from app.parsers import parse_date
@@ -232,9 +232,6 @@ def poll_sequencer_output(app_db, config):
                 'indexed_time':datetime.now()
                 }
 
-
-        #'panel_type': panel_type,
-
         # this validates the fields
         sequencer_run = SequencerRun(**run_document)
         #app_db.save(json.loads(sequencer_run.json()))
@@ -246,40 +243,9 @@ def get_mp_number_from_path(p):
     return d['sample_name']
 
 
-def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
+def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path):
     print(f'starting run: {sequencer_run_path}')
-
     app_db = get_db(get_db_url(config))
-
-    filemaker_examination_types_workflow_mapping = {
-            'DNA Lungenpanel Qiagen - kein nNGM Fall':'NGS DNA Lungenpanel',
-            'DNA Panel ONCOHS': 'NGS oncoHS',
-            'DNA PANEL ONCOHS (Mamma)': 'NGS oncoHS', # basically calls ONCOHS,
-            'DNA PANEL ONCOHS (Melanom)': 'NGS oncoHS',# basically calls ONCOHS
-            'DNA PANEL ONCOHS (Colon)': 'NGS oncoHS',# basically calls ONCOHS
-            'DNA PANEL ONCOHS (GIST)': 'NGS oncoHS',# basically calls ONCOHS
-            'DNA PANEL 522': None, # research panel
-            'DNA PANEL Multimodel PanCancer DNA': None,
-            'DNA PANEL Multimodel PanCancer RNA': None,
-            'NNGM Lunge Qiagen': None,
-            'RNA Fusion Lunge': 'NGS RNA Fusion Lunge',
-            'RNA Sarkompanel': None,
-            }
-
-    workflows = {
-        'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
-        'NGS oncoHS' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
-        'NGS BRCAness': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-        'NGS RNA Sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-        'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
-        'NGS PanCancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-        None: None,
-        }
-
-
-    #workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
-    #workflow = '/data/ngs_pipeline/workflow/wdl/clc_test.wdl'
-    #workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
 
     if panel_type == 'invalid':
         print('info, panel type invalid skipping')
@@ -287,11 +253,12 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
 
     workflow_type = filemaker_examination_types_workflow_mapping[panel_type]
     print(f"workflow type: {workflow_type}")
-    workflow = workflows[workflow_type]
 
-    if workflow is None:
+    if workflow_type is None:
         print('panel skipped')
         return
+
+    workflow = workflow_paths[workflow_type]
 
     pipeline_document = {
             'document_type':'pipeline_run',
@@ -387,6 +354,73 @@ def start_run(config, workflow_inputs, panel_type, sequencer_run_path):
         pipeline_document = db_save(pipeline_document)
 
 
+def handle_sequencer_run(config, new_run):
+    year_str = new_run['key']['parsed']['date']
+    year = datetime.strptime(year_str, '%y%m%d').year
+    samples = []
+
+    sample_paths = (
+            Path(config['miseq_output_folder']) 
+            / Path(new_run['key']['original_path']).name
+            ).rglob('*.fastq.gz')
+
+    for sample_path in sample_paths:
+        try:
+            mp_number_with_year = get_mp_number_from_path(str(sample_path))
+            mp_number, mp_year = mp_number_with_year.split('-')
+            print(f'{year} {mp_year} {type(year)} {type(mp_year)} {year != mp_year}')
+            '''
+            if year != mp_year:
+                raise RuntimeError('year in the examination record mismatches with the year of the samplename')
+            '''
+
+            #get the the examination the sample belongs to
+            p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+            print(sample_path)
+            print(mp_number)
+            print(p)
+
+            if len(p) != 1:
+                panel_type = 'invalid'
+            else:
+                panel_type = p[0]['value']['examinationtype']
+
+        
+            if panel_type == 'invalid':
+                raise RuntimeError('panel type invalid')
+                continue
+
+            samples.append({
+                'path':sample_path, 
+                'mp_number': mp_number, 
+                'mp_year': mp_year,
+                'panel_type': panel_type
+                })
+
+        except Exception as e:
+            print(f'error: {e}')
+            continue
+
+    # run a batch workflow for each panel type
+    for panel_type in filemaker_examination_types:
+        if panel_type == 'invalid':
+            continue 
+
+        workflow_inputs = list(map(
+            lambda s: Path(s['path']),
+            filter(
+                lambda s: s['panel_type'] == panel_type,
+                samples
+                )
+            )
+        )
+
+        start_panel_workflow(
+                config, 
+                workflow_inputs, 
+                panel_type, 
+                new_run['key']['original_path'])
+
 @mq.task
 def start_pipeline(config):
     '''
@@ -405,8 +439,7 @@ def start_pipeline(config):
 
     sequencer_run_ids = set([str(Path(r['key']['original_path']).name) for r in sequencer_runs])
     pipeline_run_refs = set([str(Path(r['key']['sequencer_run_path']).name) for r in pipeline_runs])
-    #new_run_ids = sequencer_run_ids - pipeline_run_refs
-    new_run_ids = sequencer_run_ids 
+    new_run_ids = sequencer_run_ids - pipeline_run_refs
 
     new_runs = list(filter(
         lambda x: str(Path(x['key']['original_path']).name) in new_run_ids, 
@@ -424,69 +457,4 @@ def start_pipeline(config):
             continue
 
         print(f"starting pipeline for sequencer run {new_run['key']['original_path']}")
-        year_str = new_run['key']['parsed']['date']
-
-        def parse_year(year_str):
-            y = datetime.strptime(year_str, '%y%m%d')
-            return y
-
-        year = parse_year(year_str).year
-
-        samples = []
-
-        sample_paths = (
-                Path(config['miseq_output_folder']) 
-                / Path(new_run['key']['original_path']).name
-                ).rglob('*.fastq.gz')
-
-        for sample_path in sample_paths:
-            try:
-                mp_number_with_year = get_mp_number_from_path(str(sample_path))
-                mp_number, mp_year = mp_number_with_year.split('-')
-                print(f'{year} {mp_year} {type(year)} {type(mp_year)} {year != mp_year}')
-                '''
-                if year != mp_year:
-                    raise RuntimeError('year in the examination record mismatches with the year of the samplename')
-                '''
-
-                #get the the examination the sample belongs to
-                p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
-                print(sample_path)
-                print(mp_number)
-                print(p)
-
-                if len(p) != 1:
-                    panel_type = 'invalid'
-                else:
-                    panel_type = p[0]['value']['examinationtype']
-
-            
-                if panel_type == 'invalid':
-                    raise RuntimeError('panel type invalid')
-                    continue
-
-                samples.append({
-                    'path':sample_path, 
-                    'mp_number': mp_number, 
-                    'mp_year': mp_year,
-                    'panel_type': panel_type
-                    })
-
-            except Exception as e:
-                print(f'error: {e}')
-                continue
-
-        for panel_type in filemaker_examination_types:
-            if panel_type == 'invalid':
-                continue 
-
-            workflow_inputs = list(map(
-                lambda s: Path(s['path']),
-                filter(
-                    lambda s: s['panel_type'] == panel_type,
-                    samples
-                    )
-                )
-            )
-
-            start_run(config, workflow_inputs, panel_type, new_run['key']['original_path'])
+        handle_sequencer_run(config, new_run)

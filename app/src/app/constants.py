@@ -1,4 +1,3 @@
-
 sample_size_targets = {
     'brcaness_mass': 60., # nanogram
     'brcaness_volume': 16.75, # microliter maximum
@@ -90,3 +89,16 @@ filemaker_examination_types_workflow_mapping = {
         'RNA Fusion Lunge': 'NGS RNA Fusion Lunge',
         'RNA Sarkompanel': None,
         }
+
+workflow_paths = {
+    'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
+    'NGS oncoHS' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS BRCAness': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS RNA Sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
+    'NGS PanCancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    }
+
+#workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
+#workflow = '/data/ngs_pipeline/workflow/wdl/clc_test.wdl'
+#workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
