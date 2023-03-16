@@ -3,12 +3,7 @@ import json
 from pathlib import Path
 import logging
 
-import requests
 import click
-
-from pydantic import BaseModel
-
-import pycouchdb as couch
 
 from flask import Flask, render_template, flash, request, redirect, url_for, g, current_app, Blueprint
 from werkzeug.utils import secure_filename
@@ -20,32 +15,28 @@ from app.model import panel_types, SequencerInputSample, TrackingForm, Examinati
 from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.tasks import mq, start_pipeline, get_celery_config, sync_couchdb_to_filemaker, transform_data
-from app.db_utils import setup_views
-#from app.filemaker_api import get_new_records
+from app.db_utils import setup_views, get_db_url
+from app.config import Config
 
-from more_itertools import chunked
-
-import pycouchdb
+import pycouchdb as couch
 
 APP_VERSION = '0.0.1'
 PIPELINE_VERSION = APP_VERSION
-
 UPLOAD_FOLDER = '/tmp/uploads'
 
 admin = Blueprint('admin', __name__, url_prefix='/')
 
-class AppConfig(BaseModel):
-    couchdb_host: str
-    couchdb_user: str
-    couchdb_psw: str
-    clc_hots: str
-    clc_user: str
-    clc_psw: str
-    rabbitmq_user: str
-    rabbitmq_psw: str
-    miseq_output_folder: str
-    dev: str
-    app_secret_key: bytes
+def get_db(app):
+    url = get_db_url(app)
+
+    if 'server' not in g:
+        server = couch.Server(url)
+        g.server = server
+    if 'app_db' not in g:
+        app_db = server.database('ngs_app')
+        g.app_db = app_db
+
+    return g.app_db
 
 
 def _get_pipeline_dashboard_html():
@@ -200,25 +191,6 @@ def pipeline_status():
     current_app.logger.info('pipeline status')
     return _get_pipeline_dashboard_html()
 
-def get_db_url(app):
-    host = app.config['data']['couchdb_host']
-    user = app.config['data']['couchdb_user']
-    psw = app.config['data']['couchdb_psw']
-    port = 5984
-    url = f"http://{user}:{psw}@{host}:{port}"
-    return url
-
-def get_db(app):
-    url = get_db_url(app)
-
-    if 'server' not in g:
-        server = couch.Server(url)
-        g.server = server
-    if 'app_db' not in g:
-        app_db = server.database('ngs_app')
-        g.app_db = app_db
-
-    return g.app_db
 
 
 def create_app(config):
@@ -240,37 +212,16 @@ def create_app(config):
         )
 @click.pass_context
 def main(ctx, dev, config):
-    if dev == True:
-        loaded_config = testconfig
-    elif config is not None:
-        with config.open('r') as f:
-            loaded_config = json.loads(f.read())
-    else:
-        config = Path('/etc/ngs_pipeline_config.json')
-        with config.open('r') as f:
-            loaded_config = json.loads(f.read())
-
+    cfg = Config(dev=dev, path=config)
     ctx.ensure_object(dict)
-    ctx.obj['config'] = loaded_config
-
+    ctx.obj['config'] = cfg.dict()
 
 
 @main.command()
 @click.pass_context
 def init(ctx):
     config = ctx.obj['config']
-
-    user = config['couchdb_user']
-    psw = config['couchdb_psw']
-    host = config['couchdb_host']
-    port = 5984
-    url = f"http://{user}:{psw}@{host}:{port}"
-
-    server = couch.Server(url)
-    server.create('ngs_app')
-    app_db = server.database('ngs_app')
-    setup_views(app_db)
-
+    init_db(config)
 
 @main.command()
 @click.pass_context

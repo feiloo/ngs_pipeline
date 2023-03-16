@@ -1,5 +1,12 @@
 import pycouchdb as couch
 
+def get_db_url(app):
+    host = app.config['data']['couchdb_host']
+    user = app.config['data']['couchdb_user']
+    psw = app.config['data']['couchdb_psw']
+    port = 5984
+    url = f"http://{user}:{psw}@{host}:{port}"
+    return url
 
 def clean_init_filemaker_mirror():
     server = couch.Server(url)
@@ -182,3 +189,16 @@ def setup_views(app_db):
             'patients':{"map":patient_map_fn},
             }
         })
+
+
+def init_db(config):
+    user = config['couchdb_user']
+    psw = config['couchdb_psw']
+    host = config['couchdb_host']
+    port = 5984
+    url = f"http://{user}:{psw}@{host}:{port}"
+
+    server = couch.Server(url)
+    server.create('ngs_app')
+    app_db = server.database('ngs_app')
+    setup_views(app_db)

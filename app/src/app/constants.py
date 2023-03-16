@@ -74,3 +74,19 @@ testconfig = {
         "dev":'true',
         "app_secret_key": b'_5#y2L"F4Q8z\n\xec]/'
         }
+
+
+filemaker_examination_types_workflow_mapping = {
+        'DNA Lungenpanel Qiagen - kein nNGM Fall':'NGS DNA Lungenpanel',
+        'DNA Panel ONCOHS': 'NGS oncoHS',
+        'DNA PANEL ONCOHS (Mamma)': 'NGS oncoHS', # basically calls ONCOHS,
+        'DNA PANEL ONCOHS (Melanom)': 'NGS oncoHS',# basically calls ONCOHS
+        'DNA PANEL ONCOHS (Colon)': 'NGS oncoHS',# basically calls ONCOHS
+        'DNA PANEL ONCOHS (GIST)': 'NGS oncoHS',# basically calls ONCOHS
+        'DNA PANEL 522': None, # research panel
+        'DNA PANEL Multimodel PanCancer DNA': None,
+        'DNA PANEL Multimodel PanCancer RNA': None,
+        'NNGM Lunge Qiagen': None,
+        'RNA Fusion Lunge': 'NGS RNA Fusion Lunge',
+        'RNA Sarkompanel': None,
+        }
