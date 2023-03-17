@@ -1,4 +1,6 @@
 from celery import Celery, chain
+from celery.utils.log import get_task_logger
+
 import pycouchdb as couch
 from pathlib import Path
 from datetime import datetime
@@ -8,8 +10,6 @@ import tempfile
 import logging
 import time
 import json
-
-logger = logging.getLogger(__name__)
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
@@ -34,6 +34,7 @@ mq = Celery('ngs_pipeline',
         **celery_config
         )
 
+logger = get_task_logger(__name__)
 
 with open('/etc/ngs_pipeline_config.json', 'r') as f:
     config = json.loads(f.read())
@@ -76,9 +77,8 @@ def setup_periodic_tasks(sender, **kwargs):
     )
     '''
 
-
-@mq.task
-def sync_couchdb_to_filemaker(config):
+#@mq.task
+def retrieve_new_filemaker_data(config):
     db = get_db(get_db_url(config))
 
     st = time.time()
@@ -94,12 +94,12 @@ def sync_couchdb_to_filemaker(config):
                 d = r['fieldData']
                 d['document_type']='filemaker_record'
                 db.save(d)
-                print(f"saved {i}")
+                logger.debug(f"saved {i}")
 
             if time.time() > (st + timeout):
                 raise RuntimeError('database sync timed out')
         except Exception as e:
-            print(f'cant export with offset {i} or database timed out with error: {e}')
+            logger.warning(f'cant export with offset {i} or database timed out with error: {e}')
             break
 
         off += 1
@@ -108,7 +108,7 @@ def sync_couchdb_to_filemaker(config):
 
 
 
-@mq.task
+#@mq.task
 def transform_data(config):
     app_db = get_db(get_db_url(config))
 
@@ -117,13 +117,13 @@ def transform_data(config):
         #app_db.delete(p['value']['_id'])
         deleted_docs.append(p['value'])
 
-    print(len(deleted_docs))
+    logger.info(len(deleted_docs))
 
     for p in app_db.query('examinations/examinations'):
         #app_db.delete(p['value']['_id'])
         deleted_docs.append(p['value'])
 
-    print(len(deleted_docs))
+    logger.info(len(deleted_docs))
 
     todelete = []
     for d in deleted_docs:
@@ -168,7 +168,7 @@ def transform_data(config):
                     examinations=[e.id for e in exams],
                     )
             except Exception as e:
-                print(e)
+                logger.warning(e)
 
                 patient = Patient(
                     id=str(uuid4()),
@@ -192,10 +192,15 @@ def transform_data(config):
 @mq.task
 def poll_new_cases(app_db, config):
     app_db = get_db(get_db_url(config))
-    transform_data(config)
+    #transform_data(config)
 
     new_cases = app_db.query('examinations/new_examinations')
     return new_cases
+
+@mq.task
+def sync_couchdb_to_filemaker(config):
+    retrieve_new_filemaker_data(config)
+    transform_data(config)
 
 
 @mq.task
@@ -244,18 +249,18 @@ def get_mp_number_from_path(p):
 
 
 def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path):
-    print(f'starting run: {sequencer_run_path}')
+    logger.info(f'starting run: {sequencer_run_path}')
     app_db = get_db(get_db_url(config))
 
     if panel_type == 'invalid':
-        print('info, panel type invalid skipping')
+        logger.warning('info, panel type invalid skipping')
         return
 
     workflow_type = filemaker_examination_types_workflow_mapping[panel_type]
-    print(f"workflow type: {workflow_type}")
+    logger.debug(f"workflow type: {workflow_type}")
 
     if workflow_type is None:
-        print('panel skipped')
+        logger.info('panel skipped')
         return
 
     workflow = workflow_paths[workflow_type]
@@ -288,7 +293,7 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
             )
 
     def db_save(pipeline_run):
-        print(pipeline_run)
+        logger.debug(pipeline_run)
         pr = app_db.save(pipeline_run.to_dict())
         return pipeline_run.from_dict(pr)
 
@@ -349,7 +354,7 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
                 pipeline_run = db_save(pipeline_run)
 
     except Exception as e:
-        print(e)
+        logger.warning(e)
         pipeline_document['status'] = 'error'
         pipeline_document = db_save(pipeline_document)
 
@@ -376,7 +381,7 @@ def handle_sequencer_run(config:dict, new_run:dict, app_db):
 
             #get the the examination the sample belongs to
             p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
-            print(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number}')
+            logger.info(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number}')
 
             if len(p) != 1:
                 panel_type = 'invalid'
@@ -396,7 +401,7 @@ def handle_sequencer_run(config:dict, new_run:dict, app_db):
                 })
 
         except Exception as e:
-            print(f'error: {e}')
+            logger.warning(f'error: {e}')
             continue
 
     # run a batch workflow for each panel type
@@ -413,11 +418,13 @@ def handle_sequencer_run(config:dict, new_run:dict, app_db):
             )
         )
 
+        '''
         start_panel_workflow(
                 config, 
                 workflow_inputs, 
                 panel_type, 
                 new_run['key']['original_path'])
+        '''
 
 @mq.task
 def start_pipeline(config):
@@ -445,14 +452,14 @@ def start_pipeline(config):
         )
 
     if len(new_runs) == 0:
-        print('no new runs')
+        logger.info('no new runs')
         return
     else:
-        print(f'found {len(new_runs)} new runs')
+        logger.info(f'found {len(new_runs)} new runs')
 
     for new_run in new_runs:
         if new_run['key']['state'] != 'successful':
             continue
 
-        print(f"starting pipeline for sequencer run {new_run['key']['original_path']}")
+        logger.info(f"starting pipeline for sequencer run {new_run['key']['original_path']}")
         handle_sequencer_run(config, new_run, app_db)
