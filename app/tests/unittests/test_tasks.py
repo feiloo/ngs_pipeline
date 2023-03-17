@@ -2,10 +2,10 @@ import pytest
 
 from app.parsers import parse_fastq_name
 from app.constants import testconfig
+from app.model import filemaker_examination_types
 import app
 from app.tasks import handle_sequencer_run
 
-#def test_start_panel_workflow(testconfig)uI#, workflow_inputs, panel_type, sequencer_run_path):
 def test_start_panel_workflow(config):
     config=testconfig
     panel_type=None
@@ -46,8 +46,13 @@ exam = {
 	
 
 class MockDB:
-    def save(self, *args, **kwargs):
-        pass
+    def __init__(self):
+        self.data = {}
+        self.k = 0
+
+    def save(self, doc, *args, **kwargs):
+        self.k+=1
+        self.data[self.k] = doc
 
     def get(self, *args, **kwargs):
         pass
@@ -74,15 +79,19 @@ def test_handle_sequencer_run(monkeypatch, config, sequencer_run, db):
                     panel_type, 
                     new_run['key']['original_path'])
         '''
-        pass
+        return 'ok'
 
     def get_db_mock(*args,**kwargs):
         return MockDB()
 
     monkeypatch.setattr(app.tasks, 'start_panel_workflow', start_panel_workflow_mock)
+    monkeypatch.setattr(app.tasks, 'get_db', start_panel_workflow_mock)
     
     workflow_inputs=[]
     panel_type=''
-    sequencer_run_path=''
+    sequencer_run_path='/data/private_testdata/miseq_output_testdata/220831_M03135_0376_000000000-KHR5V'
     #app.tasks.start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path)
-    app.tasks.handle_sequencer_run(config, new_run={'key':sequencer_run}, app_db=db)
+    res = app.tasks.handle_sequencer_run(config, new_run={'key':sequencer_run})
+
+    # because workflow inputs require [] workflows to be run
+    assert res == []

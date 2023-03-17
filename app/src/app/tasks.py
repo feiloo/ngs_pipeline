@@ -204,7 +204,9 @@ def sync_couchdb_to_filemaker(config):
 
 
 @mq.task
-def poll_sequencer_output(app_db, config):
+def poll_sequencer_output(config):
+    app_db = get_db(get_db_url(config))
+
     # first, sync db with miseq output data
     sequencer_runs = list(app_db.query('sequencer_runs/all'))
     sequencer_paths = [str(r['key']['original_path']) for r in sequencer_runs]
@@ -247,59 +249,16 @@ def get_mp_number_from_path(p):
     d = parse_fastq_name(Path(p).name)
     return d['sample_name']
 
-
-def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path):
-    logger.info(f'starting run: {sequencer_run_path}')
+def db_save(pipeline_run):
     app_db = get_db(get_db_url(config))
+    logger.debug(pipeline_run)
+    pr = app_db.save(pipeline_run.to_dict())
+    return pipeline_run.from_dict(pr)
 
-    if panel_type == 'invalid':
-        logger.warning('info, panel type invalid skipping')
-        return
+def workflow_backend_execute(config, pipeline_run):
+    logger.debug(f'workflow backend starts executing {pipeline_run}')
 
-    workflow_type = filemaker_examination_types_workflow_mapping[panel_type]
-    logger.debug(f"workflow type: {workflow_type}")
-
-    if workflow_type is None:
-        logger.info('panel skipped')
-        return
-
-    workflow = workflow_paths[workflow_type]
-
-    pipeline_document = {
-            'document_type':'pipeline_run',
-            'created_time':str(datetime.now()),
-            'input_samples': [str(x) for x in workflow_inputs],
-            'sequencer_run': Path(sequencer_run_path),
-            'workflow': workflow,
-            'status': 'running',
-            'logs': {
-                'stderr': '',
-                'stdout': '',
-                }
-            }
-
-    pipeline_run = PipelineRun(
-            id=str(uuid4()),
-            created_time=datetime.now(),
-            input_samples=[str(x) for x in workflow_inputs],
-            sequencer_run_path=Path(sequencer_run_path),
-            sequencer_run_id='',
-            workflow=workflow,
-            status='running',
-            logs={
-                'stderr': '',
-                'stdout': '',
-                }
-            )
-
-    def db_save(pipeline_run):
-        logger.debug(pipeline_run)
-        pr = app_db.save(pipeline_run.to_dict())
-        return pipeline_run.from_dict(pr)
-
-    pipeline_run = db_save(pipeline_run)
-    #exam = app_db.query('examinations/examination_fm_join')
-    #p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+    return
 
     try:
         output_dir = '/data/fhoelsch/wdl_out'
@@ -319,8 +278,8 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
                         '--env', f"CLC_USER={clc_user}", 
                         '--env', f'CLC_PSW={clc_psw}', 
                         '--dir', output_dir, 
-                        workflow
-                        ] + [f'files={i}' for i in workflow_inputs]
+                        pipeline_run.workflow
+                        ] + [f'files={i}' for i in pipeline_run.workflow_inputs]
 
                 pipeline_proc = subprocess.Popen(
                         cmd,
@@ -355,11 +314,56 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
 
     except Exception as e:
         logger.warning(e)
+        
+        # check types by converting into domain model object
+        pipeline_document = pipeline_run.to_dict()
         pipeline_document['status'] = 'error'
-        pipeline_document = db_save(pipeline_document)
+        pipeline_run = pipeline_run.from_dict(pipeline_document)
+        pipeline_run = db_save(pipeline_run)
 
 
-def handle_sequencer_run(config:dict, new_run:dict, app_db):
+def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path):
+    logger.info(f'starting run: {sequencer_run_path}')
+    app_db = get_db(get_db_url(config))
+
+    if panel_type == 'invalid':
+        logger.warning('info, panel type invalid skipping')
+        return
+
+    workflow_type = filemaker_examination_types_workflow_mapping[panel_type]
+    logger.debug(f"workflow type: {workflow_type}")
+
+    if workflow_type is None:
+        logger.info('panel skipped')
+        return
+
+    workflow = workflow_paths[workflow_type]
+
+    pipeline_run = PipelineRun(
+            id=str(uuid4()),
+            created_time=datetime.now(),
+            input_samples=[str(x) for x in workflow_inputs],
+            sequencer_run_path=Path(sequencer_run_path),
+            sequencer_run_id='',
+            workflow=workflow,
+            status='running',
+            logs={
+                'stderr': '',
+                'stdout': '',
+                }
+            )
+
+
+    pipeline_run = db_save(pipeline_run)
+    #exam = app_db.query('examinations/examination_fm_join')
+    #p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+
+    workflow_backend_execute(config, pipeline_run)
+
+
+def handle_sequencer_run(config:dict, new_run:dict):
+    app_db = get_db(get_db_url(config))
+
     year_str = new_run['key']['parsed']['date']
     year = datetime.strptime(year_str, '%y%m%d').year
     samples = []
@@ -397,12 +401,15 @@ def handle_sequencer_run(config:dict, new_run:dict, app_db):
                 'path':sample_path, 
                 'mp_number': mp_number, 
                 'mp_year': mp_year,
-                'panel_type': panel_type
+                'panel_type': panel_type,
+                'sequencer_run': new_run,
                 })
 
         except Exception as e:
             logger.warning(f'error: {e}')
             continue
+
+    results = []
 
     # run a batch workflow for each panel type
     for panel_type in filemaker_examination_types:
@@ -418,13 +425,19 @@ def handle_sequencer_run(config:dict, new_run:dict, app_db):
             )
         )
 
-        '''
-        start_panel_workflow(
+        if len(workflow_inputs) == 0:
+            continue
+
+        result = start_panel_workflow(
                 config, 
                 workflow_inputs, 
                 panel_type, 
-                new_run['key']['original_path'])
-        '''
+                new_run['key']['original_path'],
+                )
+
+        results.append(result)
+
+    return results
 
 @mq.task
 def start_pipeline(config):
@@ -436,8 +449,7 @@ def start_pipeline(config):
     '''
 
     app_db = get_db(get_db_url(config))
-
-    poll_sequencer_output(app_db, config)
+    poll_sequencer_output(config)
 
     sequencer_runs = list(app_db.query('sequencer_runs/all'))
     pipeline_runs = list(app_db.query('pipeline_runs/all'))
@@ -462,4 +474,4 @@ def start_pipeline(config):
             continue
 
         logger.info(f"starting pipeline for sequencer run {new_run['key']['original_path']}")
-        handle_sequencer_run(config, new_run, app_db)
+        handle_sequencer_run(config, new_run)
