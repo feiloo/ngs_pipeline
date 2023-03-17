@@ -354,7 +354,7 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
         pipeline_document = db_save(pipeline_document)
 
 
-def handle_sequencer_run(config, new_run):
+def handle_sequencer_run(config:dict, new_run:dict, app_db):
     year_str = new_run['key']['parsed']['date']
     year = datetime.strptime(year_str, '%y%m%d').year
     samples = []
@@ -368,17 +368,15 @@ def handle_sequencer_run(config, new_run):
         try:
             mp_number_with_year = get_mp_number_from_path(str(sample_path))
             mp_number, mp_year = mp_number_with_year.split('-')
-            print(f'{year} {mp_year} {type(year)} {type(mp_year)} {year != mp_year}')
-            '''
-            if year != mp_year:
+            samplename_year = datetime.strptime(mp_year, '%y').year
+
+            # check that database year field matches filename year
+            if year != samplename_year:
                 raise RuntimeError('year in the examination record mismatches with the year of the samplename')
-            '''
 
             #get the the examination the sample belongs to
             p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
-            print(sample_path)
-            print(mp_number)
-            print(p)
+            print(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number}')
 
             if len(p) != 1:
                 panel_type = 'invalid'
@@ -457,4 +455,4 @@ def start_pipeline(config):
             continue
 
         print(f"starting pipeline for sequencer run {new_run['key']['original_path']}")
-        handle_sequencer_run(config, new_run)
+        handle_sequencer_run(config, new_run, app_db)

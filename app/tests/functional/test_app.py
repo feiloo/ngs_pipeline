@@ -1,7 +1,9 @@
 import pycouchdb as couch
-from app.app import create_app, get_db, testconfig, setup_views
 from time import sleep
 import pytest
+
+from app.app import create_app, get_db, setup_views
+from app.constants import testconfig
 
 import subprocess
 import time
@@ -11,12 +13,9 @@ from app.tasks import get_celery_config, start_pipeline
 from click.testing import CliRunner
 
 podman_args = [ 'podman', 'run', '-d', '--rm' ]
-@pytest.fixture(scope='session')
-def config():
-    return testconfig
 
 @pytest.fixture(scope='session')
-def couchdb_server():
+def couchdb_server(config):
     config=testconfig
     args = podman_args + [
         '--name=test_couchdb', 
@@ -127,7 +126,7 @@ def test_db_setup_views(db):
     app_db = db 
     setup_views(app_db)
 
-def test_db_run(config, db):
+def test_pipeline_status(config, db):
     app_db = db 
     setup_views(app_db)
 
@@ -135,7 +134,7 @@ def test_db_run(config, db):
     with app.test_client() as test_client:
         res = test_client.get('/pipeline_status')
         assert res.status_code == 200
-        print(res.data)
+        #print(res.data)
 
 
 '''
