@@ -209,7 +209,7 @@ def poll_sequencer_output(config):
 
     # first, sync db with miseq output data
     sequencer_runs = list(app_db.query('sequencer_runs/all'))
-    sequencer_paths = [str(r['key']['original_path']) for r in sequencer_runs]
+    sequencer_paths = [str(r['value']['original_path']) for r in sequencer_runs]
 
     miseq_output_path = Path(config['miseq_output_folder'])
     miseq_output_runs = [miseq_output_path / x for x in miseq_output_path.iterdir()]
@@ -340,6 +340,7 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
     workflow = workflow_paths[workflow_type]
 
     pipeline_run = PipelineRun(
+            False,
             id=str(uuid4()),
             created_time=datetime.now(),
             input_samples=[str(x) for x in workflow_inputs],
@@ -361,16 +362,18 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
     workflow_backend_execute(config, pipeline_run)
 
 
-def handle_sequencer_run(config:dict, new_run:dict):
+def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
     app_db = get_db(get_db_url(config))
 
-    year_str = new_run['key']['parsed']['date']
+    new_run = {'value':seq_run.to_dict()}
+
+    year_str = new_run['value']['parsed']['date']
     year = datetime.strptime(year_str, '%y%m%d').year
     samples = []
 
     sample_paths = (
             Path(config['miseq_output_folder']) 
-            / Path(new_run['key']['original_path']).name
+            / Path(new_run['value']['original_path']).name
             ).rglob('*.fastq.gz')
 
     for sample_path in sample_paths:
@@ -425,6 +428,7 @@ def handle_sequencer_run(config:dict, new_run:dict):
             )
         )
 
+        # skip if there is no work for the pipeline
         if len(workflow_inputs) == 0:
             continue
 
@@ -432,7 +436,7 @@ def handle_sequencer_run(config:dict, new_run:dict):
                 config, 
                 workflow_inputs, 
                 panel_type, 
-                new_run['key']['original_path'],
+                new_run['value']['original_path'],
                 )
 
         results.append(result)
@@ -454,12 +458,12 @@ def start_pipeline(config):
     sequencer_runs = list(app_db.query('sequencer_runs/all'))
     pipeline_runs = list(app_db.query('pipeline_runs/all'))
 
-    sequencer_run_ids = set([str(Path(r['key']['original_path']).name) for r in sequencer_runs])
-    pipeline_run_refs = set([str(Path(r['key']['sequencer_run_path']).name) for r in pipeline_runs])
+    sequencer_run_ids = set([str(Path(r['value']['original_path']).name) for r in sequencer_runs])
+    pipeline_run_refs = set([str(Path(r['value']['sequencer_run_path']).name) for r in pipeline_runs])
     new_run_ids = sequencer_run_ids - pipeline_run_refs
 
     new_runs = list(filter(
-        lambda x: str(Path(x['key']['original_path']).name) in new_run_ids, 
+        lambda x: str(Path(x['value']['original_path']).name) in new_run_ids, 
         sequencer_runs)
         )
 
@@ -470,8 +474,9 @@ def start_pipeline(config):
         logger.info(f'found {len(new_runs)} new runs')
 
     for new_run in new_runs:
-        if new_run['key']['state'] != 'successful':
+        print(new_run['value'])
+        if new_run['value']['state'] != 'successful':
             continue
 
-        logger.info(f"starting pipeline for sequencer run {new_run['key']['original_path']}")
-        handle_sequencer_run(config, new_run)
+        logger.info(f"starting pipeline for sequencer run {new_run['value']['original_path']}")
+        handle_sequencer_run(config, SequencerRun(True, **new_run['value']))

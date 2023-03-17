@@ -62,6 +62,16 @@ class BaseDocument(BaseModel):
     data_model_version: str = DATA_MODEL_VERSION
     document_type: str
 
+    def __init__(self, map_id: bool, *args, **kwargs):
+        d = kwargs
+        if map_id==True:
+            if '_id' in d:
+                d['id'] = d.pop('_id')
+            if '_rev' in d:
+                d['rev'] = d.pop('_rev')
+
+        super().__init__(*args, **d)
+
     def to_dict(self):
         # convert to serializable dict
         d = json.loads(self.json())
@@ -73,12 +83,8 @@ class BaseDocument(BaseModel):
             d['_rev'] = self.rev
         return d
 
-    def from_dict(self, d, ):
-        if '_id' in d:
-            d['id'] = d.pop('_id')
-        if '_rev' in d:
-            d['rev'] = d.pop('_rev')
-        m = type(self)(**d)
+    def from_dict(self, d):
+        m = type(self)(True,**d)
         return m
 
 
