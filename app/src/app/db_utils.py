@@ -37,6 +37,15 @@ def clean_init_filemaker_mirror():
     return db
 
 def setup_views(app_db):
+    if 'app_state' not in app_db:
+        app_state = {
+                '_id': 'app_state',
+                'last_synced_filemaker_row':-1
+                }
+
+        app_db.save(app_state)
+
+
     sequencer_map_fn = '''
     function (doc) {
       if(doc.document_type){

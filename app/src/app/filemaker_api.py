@@ -113,14 +113,14 @@ class Filemaker:
                     })
         return self._post(url, data)
 
-    def find_mp_record(self, token, mp_number):
+    def find_mp_record(self, token, mp_number,limit=10):
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/_find'
         data = json.dumps({"query":[{"Mol_NR":f"=={mp_number}"}],
-                    "limit":10
+                    "limit":limit
                     })
         return self._post(url, data)
 
-    def get_new_records(self, day, month, year, examination_types=filemaker_examination_types):
+    def get_new_records_by_date(self, day, month, year, examination_types=filemaker_examination_types, limit=1000):
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/_find'
 
         data = json.dumps({"query":[
@@ -128,6 +128,6 @@ class Filemaker:
                 'Untersuchung':f'="{u}"'}
             for u in examination_types
             ],
-            "limit":1000
+            "limit":limit
             })
         return self._post(url,data)

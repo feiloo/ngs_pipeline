@@ -49,7 +49,7 @@ def _get_pipeline_dashboard_html():
         pr['age'] = dn - datetime.fromisoformat(pr['created_time'])
     
     sequencer_runs = list(get_db(current_app).query('sequencer_runs/all'))
-    r = [x['key'] for x in sequencer_runs]
+    r = [x['value'] for x in sequencer_runs]
 
     e = list(get_db(current_app).query('examinations/examinations?limit=10&skip=10'))
 
@@ -184,6 +184,7 @@ def save_panel_type():
         get_db(current_app).save(run)
 
     return redirect('/pipeline_status')
+
 
 @admin.route("/pipeline_status", methods=['GET'])
 def pipeline_status():
