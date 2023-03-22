@@ -211,3 +211,4 @@ def init_db(config):
     server.create('ngs_app')
     app_db = server.database('ngs_app')
     setup_views(app_db)
+    return app_db

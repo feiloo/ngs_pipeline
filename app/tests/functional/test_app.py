@@ -2,7 +2,7 @@ import pycouchdb as couch
 from time import sleep
 import pytest
 
-from app.app import create_app, get_db, setup_views
+from app.app import create_app, get_db, init_db
 from app.constants import testconfig
 
 import subprocess
@@ -15,8 +15,10 @@ from click.testing import CliRunner
 podman_args = [ 'podman', 'run', '-d', '--rm' ]
 
 @pytest.fixture(scope='session')
-def couchdb_server(config):
-    config=testconfig
+def couchdb_server():
+    args = [ 'podman', 'stop', 'test_couchdb' ]
+    subprocess.run(args)
+
     args = podman_args + [
         '--name=test_couchdb', 
         '-e', 'COUCHDB_USER=testuser', 
@@ -62,10 +64,11 @@ def rabbitmq_server(config):
 
 
 @pytest.fixture()
-def db(couchdb_server):
+def db(couchdb_server, config):
     s = couchdb_server
-    app_db = s.create('ngs_app')
-    yield app_db
+    #app_db = s.create('ngs_app')
+    db = init_db(config)
+    yield db
     res = s.delete('ngs_app')
 
 
@@ -114,7 +117,8 @@ def test_create_document(db):
             "run_names": [],
             }
 
-    db.save(init_doc)
+    app_db = db
+    app_db.save(init_doc)
 
     #_start_pipeline(app_db)
     res = db.get('sequencer_runs')
@@ -122,14 +126,11 @@ def test_create_document(db):
     assert res == init_doc
 
 
-def test_db_setup_views(db):
-    app_db = db 
-    setup_views(app_db)
+def test_db_init_db(config, db):
+    assert db != None
 
 def test_pipeline_status(config, db):
     app_db = db 
-    setup_views(app_db)
-
     app = create_app(config)
     with app.test_client() as test_client:
         res = test_client.get('/pipeline_status')

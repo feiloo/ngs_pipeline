@@ -195,6 +195,7 @@ def transform_data(config):
             uid = str(uuid4())
 
             exam = Examination(
+                    map_id=False,
                     id=uid,
                     examinationtype=d['Untersuchung'], 
                     started_date=parse_date(d['Zeitstempel']),
@@ -209,6 +210,7 @@ def transform_data(config):
                 birthdate = datetime.strptime(d['GBD'], '%m/%d/%Y'),
 
                 patient = Patient(
+                    map_id=False,
                     id=str(uuid4()),
                     names=[f'{d["Vorname"], d["Name"]}'],
                     birthdate=birthdate,
@@ -219,6 +221,7 @@ def transform_data(config):
                 logger.warning(e)
 
                 patient = Patient(
+                    map_id=False,
                     id=str(uuid4()),
                     names=[f'{d["Vorname"], d["Name"]}'],
                     gender=d['Geschlecht'],
@@ -277,19 +280,16 @@ def poll_sequencer_output(config):
         if str(run_name) in sequencer_paths:
             continue
 
-        run_document = {
-                'id': str(uuid4()),
-                'document_type':'sequencer_run',
-                'original_path':Path(run_name), 
-                'name_dirty':str(dirty), 
-                'parsed':parsed, 
-                'state': 'successful',
-                'indexed_time':datetime.now()
-                }
+        sequencer_run = SequencerRun(
+                id=str(uuid4()),
+                original_path=Path(run_name),
+                name_dirty=str(dirty),
+                parsed=parsed,
+                state='successful',
+                indexed_time=datetime.now()
+                )
 
         # this validates the fields
-        sequencer_run = SequencerRun(**run_document)
-        #app_db.save(json.loads(sequencer_run.json()))
         app_db.save(sequencer_run.to_dict())
 
 
