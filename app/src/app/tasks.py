@@ -316,7 +316,7 @@ def workflow_backend_execute(config, pipeline_run, is_aborted):
     logger.debug(f'workflow backend starts executing {pipeline_run.id}')
 
     try:
-        output_dir = '/data/fhoelsch/wdl_out'
+        output_dir = config['workflow_output_dir']
 
         # we write to tempfile, even though there is an output log file in the wdl output directory, 
         # because elsewhere we dont know the run name

@@ -20,6 +20,7 @@ class ConfigParams(BaseModel):
     miseq_output_folder: str
     dev: str
     app_secret_key: bytes
+    workflow_output_dir: str
 
 
 class Config:
