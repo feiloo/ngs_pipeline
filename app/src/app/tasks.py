@@ -43,10 +43,13 @@ assert 'filemaker_server' in config
 assert 'filemaker_user' in config
 assert 'filemaker_psw' in config
 
-filemaker = Filemaker(
-        config['filemaker_server'], 
-        config['filemaker_user'], 
-        config['filemaker_psw'])
+
+def get_filemaker(config):
+    filemaker = Filemaker(
+            config['filemaker_server'], 
+            config['filemaker_user'], 
+            config['filemaker_psw'])
+    return filemaker
 
 def get_db(url):
     server = couch.Server(url)
@@ -77,16 +80,18 @@ def setup_periodic_tasks(sender, **kwargs):
     )
     '''
 
-def retrieve_new_filemaker_data_full(config):
+def retrieve_new_filemaker_data_full(config, backoff_time=5):
     db = get_db(get_db_url(config))
 
     st = time.time()
     timeout = 2*60*60 # 2h in seconds
     off = 0
+    filemaker = get_filemaker(config)
+
     while 1:
         try:
             # backoff for a few seconds
-            time.sleep(5)
+            time.sleep(backoff_time)
             resp = filemaker.get_all_records(offset=off*1000+1)
             recs = resp['data']
             for i,r in enumerate(recs):
@@ -105,8 +110,8 @@ def retrieve_new_filemaker_data_full(config):
 
     return db
 
-#@mq.task
-def retrieve_new_filemaker_data_incremental(config):
+
+def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
     db = get_db(get_db_url(config))
 
     st = time.time()
@@ -115,6 +120,7 @@ def retrieve_new_filemaker_data_incremental(config):
     rowid = -1
     app_state = db.get('app_state')
     last_synced_row = int(app_state['last_synced_filemaker_row'])
+    filemaker = get_filemaker(config)
     off = 0
 
     def make_fm_doc(r):
@@ -126,7 +132,7 @@ def retrieve_new_filemaker_data_incremental(config):
     while 1:
         try:
             # backoff for a few seconds
-            time.sleep(5)
+            time.sleep(backoff_time)
             resp = filemaker.get_all_records(offset=off*1000+last_synced_row+1, limit=1000)
             recs = list(resp['data'])
             logger.debug(f"retrieved {len(recs)} filemaker_rows")
@@ -142,17 +148,16 @@ def retrieve_new_filemaker_data_incremental(config):
             newdocs = list(map(make_fm_doc, recs)) + [app_state]
             #logger.debug(f"newdocs {newdocs}")
             db.save_bulk(newdocs)
-            #for i,r in enumerate(recs):
 
             if time.time() > (st + timeout):
-                raise RuntimeError('database sync timed out')
+                raise RuntimeError('database sync timed out took too long in total')
         except Exception as e:
             logger.warning(f'cant export with offset {off} or database timed out with error: {e}')
             break
 
         off += 1
 
-    return db
+    return off
 
 
 

@@ -4,7 +4,7 @@ from app.parsers import parse_fastq_name
 from app.constants import testconfig
 from app.model import filemaker_examination_types, SequencerRun
 import app
-from app.tasks import handle_sequencer_run
+from app.tasks import handle_sequencer_run, retrieve_new_filemaker_data_incremental
 
 def test_start_panel_workflow(config):
     config=testconfig
@@ -54,8 +54,17 @@ class MockDB:
     def save(self, doc, *args, **kwargs):
         self.k+=1
         self.data[self.k] = doc
+        print(doc)
 
-    def get(self, *args, **kwargs):
+    def save_bulk(self, docs, *args, **kwargs):
+        print(docs)
+        for d in docs:
+            self.k+=1
+            self.data[self.k] = d
+
+    def get(self, id, *args, **kwargs):
+        if id == 'app_state':
+            return {'_id':'app_state','last_synced_filemaker_row':0}
         pass
 
     def query(self, url, *args, **kwargs):
@@ -86,7 +95,7 @@ def test_handle_sequencer_run(monkeypatch, config, sequencer_run, db):
         return MockDB()
 
     monkeypatch.setattr(app.tasks, 'start_panel_workflow', start_panel_workflow_mock)
-    monkeypatch.setattr(app.tasks, 'get_db', start_panel_workflow_mock)
+    monkeypatch.setattr(app.tasks, 'get_db', get_db_mock)
     
     workflow_inputs=[]
     panel_type=''
@@ -96,3 +105,17 @@ def test_handle_sequencer_run(monkeypatch, config, sequencer_run, db):
 
     # because workflow inputs require [] workflows to be run
     assert res == []
+
+
+def test_retrieve_new_filemaker_data_incremental(monkeypatch, config, db, fm_mock):
+    def get_db_mock(*args,**kwargs):
+        return MockDB()
+
+    def get_filemaker_mock(*args, **kwargs):
+        return fm_mock
+
+    monkeypatch.setattr(app.tasks, 'get_db', get_db_mock)
+    monkeypatch.setattr(app.tasks, 'get_filemaker', get_filemaker_mock)
+
+    retrieve_new_filemaker_data_incremental(config, backoff_time=0.01)
+    #assert False
