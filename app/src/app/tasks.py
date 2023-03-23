@@ -1,5 +1,6 @@
-from celery import Celery, chain
+from celery import Celery, chain, group
 from celery.utils.log import get_task_logger
+from celery.contrib.abortable import AbortableTask
 
 import pycouchdb as couch
 from pathlib import Path
@@ -20,21 +21,16 @@ from app.db_utils import clean_init_filemaker_mirror
 from app.parsers import parse_date
 from uuid import UUID, uuid4
 
+# for sigint
+import signal
+
 
 def get_celery_config(config):
     celery_config = { 
-      'backend_url': f'couchdb://{config["couchdb_user"]}:{config["couchdb_psw"]}@localhost:8001/pipeline_results',
-      'broker_url': f'pyamqp://{config["rabbitmq_user"]}:{config["rabbitmq_psw"]}@localhost//'
+      'backend': f'couchdb://{config["couchdb_user"]}:{config["couchdb_psw"]}@localhost:5984/pipeline_results',
+      'broker': f'pyamqp://{config["rabbitmq_user"]}:{config["rabbitmq_psw"]}@localhost//',
     }
     return celery_config
-
-celery_config = get_celery_config(testconfig)
-
-mq = Celery('ngs_pipeline', 
-        **celery_config
-        )
-
-logger = get_task_logger(__name__)
 
 with open('/etc/ngs_pipeline_config.json', 'r') as f:
     config = json.loads(f.read())
@@ -42,6 +38,14 @@ with open('/etc/ngs_pipeline_config.json', 'r') as f:
 assert 'filemaker_server' in config
 assert 'filemaker_user' in config
 assert 'filemaker_psw' in config
+
+celery_config = get_celery_config(config)
+
+mq = Celery('ngs_pipeline', 
+        **celery_config
+        )
+
+logger = get_task_logger(__name__)
 
 
 def get_filemaker(config):
@@ -51,11 +55,6 @@ def get_filemaker(config):
             config['filemaker_psw'])
     return filemaker
 
-def get_db(url):
-    server = couch.Server(url)
-    app_db = server.database('ngs_app')
-    return app_db
-
 
 def get_db_url(config):
     user = config['couchdb_user']
@@ -64,6 +63,11 @@ def get_db_url(config):
     port = 5984
     url = f"http://{user}:{psw}@{host}:{port}"
     return url
+
+def get_db(url):
+    server = couch.Server(url)
+    app_db = server.database('ngs_app')
+    return app_db
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
@@ -127,7 +131,6 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
         d = r['fieldData']
         d['document_type']='filemaker_record'
         return d
-
 
     while 1:
         try:
@@ -259,7 +262,6 @@ def sync_couchdb_to_filemaker(config):
     transform_data(config)
 
 
-@mq.task
 def poll_sequencer_output(config):
     app_db = get_db(get_db_url(config))
 
@@ -286,6 +288,7 @@ def poll_sequencer_output(config):
             continue
 
         sequencer_run = SequencerRun(
+                map_id=False,
                 id=str(uuid4()),
                 original_path=Path(run_name),
                 name_dirty=str(dirty),
@@ -308,10 +311,9 @@ def db_save(pipeline_run):
     pr = app_db.save(pipeline_run.to_dict())
     return pipeline_run.from_dict(pr)
 
-def workflow_backend_execute(config, pipeline_run):
-    logger.debug(f'workflow backend starts executing {pipeline_run}')
 
-    return
+def workflow_backend_execute(config, pipeline_run, is_aborted):
+    logger.debug(f'workflow backend starts executing {pipeline_run.id}')
 
     try:
         output_dir = '/data/fhoelsch/wdl_out'
@@ -332,7 +334,7 @@ def workflow_backend_execute(config, pipeline_run):
                         '--env', f'CLC_PSW={clc_psw}', 
                         '--dir', output_dir, 
                         pipeline_run.workflow
-                        ] + [f'files={i}' for i in pipeline_run.workflow_inputs]
+                        ] + [f'files={i}' for i in pipeline_run.input_samples]
 
                 pipeline_proc = subprocess.Popen(
                         cmd,
@@ -343,6 +345,11 @@ def workflow_backend_execute(config, pipeline_run):
 
                 # update db entry every second when the process runs
                 while pipeline_proc.poll() is None:
+                    if is_aborted():
+                        logger.warning(f'pipeline_run: {pipeline_run.id} is aborting')
+                        pipeline_proc.send_signal(signal.SIGINT)
+                        logger.warning(f'pipeline_run: {pipeline_run.id} was aborted')
+
                     stde.seek(0)
                     stdo.seek(0)
                     pipeline_run.logs.stderr = stde.read().decode('utf-8')
@@ -360,6 +367,8 @@ def workflow_backend_execute(config, pipeline_run):
                 retcode = pipeline_proc.returncode
                 if retcode == 0:
                     pipeline_run.status = 'successful'
+                elif retcode == signal.SIGINT:
+                    pipeline_run.status = 'aborted'
                 else:
                     pipeline_run.status = 'error'
 
@@ -375,7 +384,10 @@ def workflow_backend_execute(config, pipeline_run):
         pipeline_run = db_save(pipeline_run)
 
 
-def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path):
+@mq.task(bind=True, base=AbortableTask)
+# self because its an abortable task
+# aborting doesnt work yet
+def start_panel_workflow(self, config, workflow_inputs, panel_type, sequencer_run_path):
     logger.info(f'starting run: {sequencer_run_path}')
     app_db = get_db(get_db_url(config))
 
@@ -412,7 +424,9 @@ def start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path
     #exam = app_db.query('examinations/examination_fm_join')
     #p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
 
-    workflow_backend_execute(config, pipeline_run)
+    # pass is_aborted function to backend for stopping
+    workflow_backend_execute(config, pipeline_run, self.is_aborted)
+
 
 
 def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
@@ -465,7 +479,7 @@ def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
             logger.warning(f'error: {e}')
             continue
 
-    results = []
+    tasks = []
 
     # run a batch workflow for each panel type
     for panel_type in filemaker_examination_types:
@@ -473,7 +487,7 @@ def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
             continue 
 
         workflow_inputs = list(map(
-            lambda s: Path(s['path']),
+            lambda s: str(Path(s['path'])),
             filter(
                 lambda s: s['panel_type'] == panel_type,
                 samples
@@ -485,16 +499,21 @@ def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
         if len(workflow_inputs) == 0:
             continue
 
-        result = start_panel_workflow(
+        # create async celery tasks
+        signature = start_panel_workflow.s(
                 config, 
                 workflow_inputs, 
                 panel_type, 
                 new_run['value']['original_path'],
                 )
+        
+        tasks.append(signature)
 
-        results.append(result)
+    lazy_group = group(tasks)
+    promise = lazy_group.apply_async()
 
-    return results
+    return promise
+
 
 @mq.task
 def start_pipeline(config):
@@ -526,10 +545,15 @@ def start_pipeline(config):
     else:
         logger.info(f'found {len(new_runs)} new runs')
 
+    results = []
+
     for new_run in new_runs:
-        print(new_run['value'])
         if new_run['value']['state'] != 'successful':
             continue
 
         logger.info(f"starting pipeline for sequencer run {new_run['value']['original_path']}")
-        handle_sequencer_run(config, SequencerRun(True, **new_run['value']))
+        results = handle_sequencer_run(config, SequencerRun(True, **new_run['value']))
+        results.append(r)
+
+    return results
+

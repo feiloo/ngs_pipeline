@@ -14,7 +14,7 @@ from app.model import panel_types, SequencerInputSample, TrackingForm, Examinati
 
 from app.samplesheet import read_samplesheet
 from app.parsers import parse_fastq_name, parse_miseq_run_name
-from app.tasks import mq, start_pipeline, get_celery_config, sync_couchdb_to_filemaker, transform_data
+from app.tasks import mq, get_celery_config, start_pipeline, sync_couchdb_to_filemaker
 from app.db_utils import setup_views, get_db_url, init_db
 from app.config import Config
 
@@ -42,7 +42,7 @@ def get_db(app):
 def _get_pipeline_dashboard_html():
     progress = 0
     pipeline_runs = list(get_db(current_app).query('pipeline_runs/all'))
-    p = [x['key'] for x in pipeline_runs]
+    p = [x['value'] for x in pipeline_runs]
 
     dn = datetime.now()
     for pr in p:
@@ -158,7 +158,7 @@ def save_tracking_form():
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():
     current_app.logger.info('start pipeline')
-    start_pipeline.apply_async(args=(dict(current_app.config['data']),))
+    result = start_pipeline.apply_async(args=(dict(current_app.config['data']),))
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_sync", methods=['POST'])
@@ -170,7 +170,6 @@ def pipeline_sync():
 @admin.route("/pipeline_stop", methods=['POST'])
 def stop_pipeline():
     current_app.logger.info('stop pipeline')
-    #_stop_pipeline(app_db)
     return redirect('/pipeline_status')
 
 @admin.route("/save_panel_type", methods=['POST'])

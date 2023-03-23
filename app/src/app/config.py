@@ -14,6 +14,9 @@ class ConfigParams(BaseModel):
     clc_psw: str
     rabbitmq_user: str
     rabbitmq_psw: str
+    filemaker_server: str
+    filemaker_user: str
+    filemaker_psw: str
     miseq_output_folder: str
     dev: str
     app_secret_key: bytes

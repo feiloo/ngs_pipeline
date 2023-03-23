@@ -90,12 +90,15 @@ filemaker_examination_types_workflow_mapping = {
         'RNA Sarkompanel': None,
         }
 
+
+#'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
+
 workflow_paths = {
-    'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
+    'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/test.wdl',
     'NGS oncoHS' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
     'NGS BRCAness': '/data/ngs_pipeline/workflow/wdl/test.wdl',
     'NGS RNA Sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-    'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
+    'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/test.wdl',
     'NGS PanCancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
     }
 
