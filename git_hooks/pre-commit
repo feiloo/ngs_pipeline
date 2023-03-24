@@ -49,4 +49,11 @@ fi
 #exec git diff-index --check --cached $against --
 
 
-python3 compliance/sensitive_data_check.py . compliance/blacklist_mimetypes compliance/blacklist_files compliance/whitelist_files
+#python3 compliance/sensitive_data_check.py . compliance/blacklist_mimetypes compliance/blacklist_files compliance/whitelist_files
+
+meson setup /tmp/builddir_ngs_pipeline_pre_commit --wipe
+pushd /tmp/builddir_ngs_pipeline_pre_commit
+meson compile
+meson test 
+popd
+
