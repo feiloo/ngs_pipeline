@@ -6,33 +6,26 @@ we target an unimpeded integration experience for new diagnosis methods.
 
 success will be indicated through a low time and engineering effort when deploying new diagnosis.
 
-in the next few months, we want to have an automatic workflow containing:
-* liftover/remap
-* ensembleorg/vep
-* copy number variation analysis
-    
 this project is mostly for documentation, but secondly aimed at bioinformatic clinicians, researchers and brave developers wanting to run their own pipeline.
 
-## compliance
-
-to avoid commiting possibly sensitive data, there is a scanning script in compliance.
-it's executed during `meson test` and pre-commit.
-
-it's recommended to regularily check and extend that script with aggressive patterns for sensitive data detection.
-
-
+it also contains a webapp for controlling the pipeline execution and data management.
 
 ## build
 
-# dependencies
+### build dependencies
+
+basic:
 
 * meson
-* ninja-build
+* ninja
+* plantuml
+
+submodule dependencies can be found in the submodule directories
 
 ## build commands
 
 ```
-meson setup /tmp/builddir
+meson setup /tmp/builddir --wipe
 cd /tmp/builddir
 meson configure -Doption=value
 meson compile -v
@@ -48,14 +41,18 @@ the productions server automatically tries pulling the latest dist tarball
 meson --reconfigure /tmp/builddir
 ```
 
+## development
 
-### dependencies
+when developing make sure to run:
+```
+cp git_hooks/* .git/hooks
+```
 
-pip:
-* meson
-* python
-* miniwdl
+this enables pre commit checks to automatically ensure compliance
 
-zypper:
-* ninja
-* plantuml
+## compliance
+
+to avoid commiting possibly sensitive data, there is a scanning script in compliance.
+it's executed during `meson test` and pre-commit.
+
+it's recommended to regularily check and extend that script with aggressive patterns for sensitive data detection.
