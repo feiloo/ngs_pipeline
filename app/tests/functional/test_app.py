@@ -2,7 +2,9 @@ import pycouchdb as couch
 from time import sleep
 import pytest
 
-from app.app import create_app, get_db, init_db
+from app.tasks import get_db
+from app.ui import create_app
+from app.db_utils import init_db
 from app.constants import testconfig
 
 import subprocess
