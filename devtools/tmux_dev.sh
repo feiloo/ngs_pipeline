@@ -15,6 +15,8 @@ tmux split-window -t ngs_pipeline_dev
 tmux split-window -t ngs_pipeline_dev
 tmux split-window -t ngs_pipeline_dev
 
+tmux send-keys -t ngs_pipeline_dev 'podman start registry' C-m
+
 tmux select-pane -t 0
 tmux send-keys -t ngs_pipeline_dev '/data/fhoelsch/run_couchdb.sh' C-m
 
