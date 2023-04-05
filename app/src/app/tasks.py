@@ -18,7 +18,7 @@ from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker
 from app.constants import testconfig, filemaker_examination_types_workflow_mapping, workflow_paths
 from app.config import Config
 from app.filemaker_api import Filemaker
-from app.db_utils import clean_init_filemaker_mirror
+from app.db_utils import clean_init_filemaker_mirror, DB
 from app.parsers import parse_date
 from uuid import UUID, uuid4
 
@@ -42,20 +42,6 @@ mq = Celery('ngs_pipeline',
         **celery_config
         )
 
-
-def get_db_url(config):
-    user = config['couchdb_user']
-    psw = config['couchdb_psw']
-    host = 'localhost'
-    port = 5984
-    url = f"http://{user}:{psw}@{host}:{port}"
-    return url
-
-def get_db(url):
-    server = couch.Server(url)
-    app_db = server.database('ngs_app')
-    return app_db
-
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sig = start_pipeline.signature(args=(config,))
@@ -72,7 +58,8 @@ def setup_periodic_tasks(sender, **kwargs):
     '''
 
 def retrieve_new_filemaker_data_full(config, backoff_time=5):
-    db = get_db(get_db_url(config))
+    #db = get_db(get_db_url(config))
+    db = DB.from_config(config)
 
     st = time.time()
     timeout = 2*60*60 # 2h in seconds
@@ -103,7 +90,8 @@ def retrieve_new_filemaker_data_full(config, backoff_time=5):
 
 
 def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
-    db = get_db(get_db_url(config))
+    #db = get_db(get_db_url(config))
+    db = DB.from_config(config)
 
     st = time.time()
     timeout = 2*60*60 # 2h in seconds
@@ -152,13 +140,13 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
 
 #@mq.task
 def transform_data(config):
-    app_db = get_db(get_db_url(config))
+    db = DB.from_config(config)
 
     deleted_docs = []
-    for p in app_db.query('patients/patients'):
+    for p in db.query('patients/patients'):
         deleted_docs.append(p['value'])
 
-    for p in app_db.query('examinations/examinations'):
+    for p in db.query('examinations/examinations'):
         deleted_docs.append(p['value'])
 
     todelete = []
@@ -166,14 +154,14 @@ def transform_data(config):
         doc = {'_id':d['_id'], '_rev':d['_rev'], 'deleted':True}
         todelete.append(doc)
 
-    app_db.save_bulk(todelete)
+    db.save_bulk(todelete)
 
     k = None
     exams = []
 
     docs_to_save = []
 
-    for doc in app_db.query('patients/patient_aggregation'):
+    for doc in db.query('patients/patient_aggregation'):
         if k is None:
             k = doc['key']
 
@@ -224,7 +212,7 @@ def transform_data(config):
             k = doc['key']
             exams = []
 
-    app_db.save_bulk(docs_to_save)
+    db.save_bulk(docs_to_save)
 
 
 @mq.task
@@ -234,10 +222,10 @@ def sync_couchdb_to_filemaker(config):
 
 
 def poll_sequencer_output(config):
-    app_db = get_db(get_db_url(config))
+    db = DB.from_config(config)
 
     # first, sync db with miseq output data
-    sequencer_runs = list(app_db.query('sequencer_runs/all'))
+    sequencer_runs = list(db.query('sequencer_runs/all'))
     sequencer_paths = [str(r['value']['original_path']) for r in sequencer_runs]
 
     miseq_output_path = Path(config['miseq_output_folder'])
@@ -269,22 +257,17 @@ def poll_sequencer_output(config):
                 )
 
         # this validates the fields
-        app_db.save(sequencer_run.to_dict())
+        db.save(sequencer_run.to_dict())
 
 
 def get_mp_number_from_path(p):
     d = parse_fastq_name(Path(p).name)
     return d['sample_name']
 
-def db_save(pipeline_run):
-    app_db = get_db(get_db_url(config))
-    logger.debug(pipeline_run)
-    pr = app_db.save(pipeline_run.to_dict())
-    return pipeline_run.from_dict(pr)
-
 
 def workflow_backend_execute(config, pipeline_run, is_aborted):
     logger.debug(f'workflow backend starts executing {pipeline_run.id}')
+    db = DB.from_config(config)
 
     try:
         output_dir = config['workflow_output_dir']
@@ -326,7 +309,7 @@ def workflow_backend_execute(config, pipeline_run, is_aborted):
                     pipeline_run.logs.stderr = stde.read().decode('utf-8')
                     pipeline_run.logs.stdout = stdo.read().decode('utf-8')
 
-                    pipeline_run = db_save(pipeline_run)
+                    pipeline_run = db.save_obj(pipeline_run)
                     time.sleep(1)
 
                 # update db entry at the end
@@ -343,7 +326,7 @@ def workflow_backend_execute(config, pipeline_run, is_aborted):
                 else:
                     pipeline_run.status = 'error'
 
-                pipeline_run = db_save(pipeline_run)
+                pipeline_run = db.save_obj(pipeline_run)
 
     except Exception as e:
         logger.warning(e)
@@ -352,7 +335,7 @@ def workflow_backend_execute(config, pipeline_run, is_aborted):
         pipeline_document = pipeline_run.to_dict()
         pipeline_document['status'] = 'error'
         pipeline_run = pipeline_run.from_dict(pipeline_document)
-        pipeline_run = db_save(pipeline_run)
+        pipeline_run = db.save_obj(pipeline_run)
 
 
 @mq.task(bind=True, base=AbortableTask)
@@ -360,7 +343,7 @@ def workflow_backend_execute(config, pipeline_run, is_aborted):
 # aborting doesnt work yet
 def start_panel_workflow(self, config, workflow_inputs, panel_type, sequencer_run_path):
     logger.info(f'starting run: {sequencer_run_path}')
-    app_db = get_db(get_db_url(config))
+    db = DB.from_config(config)
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
@@ -391,9 +374,9 @@ def start_panel_workflow(self, config, workflow_inputs, panel_type, sequencer_ru
             )
 
 
-    pipeline_run = db_save(pipeline_run)
-    #exam = app_db.query('examinations/examination_fm_join')
-    #p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+    pipeline_run = db.save_obj(pipeline_run)
+    #exam = db.query('examinations/examination_fm_join')
+    #p = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
 
     # pass is_aborted function to backend for stopping
     workflow_backend_execute(config, pipeline_run, self.is_aborted)
@@ -401,7 +384,7 @@ def start_panel_workflow(self, config, workflow_inputs, panel_type, sequencer_ru
 
 
 def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
-    app_db = get_db(get_db_url(config))
+    db = DB.from_config(config)
 
     new_run = {'value':seq_run.to_dict()}
 
@@ -425,7 +408,7 @@ def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
                 raise RuntimeError('year in the examination record mismatches with the year of the samplename')
 
             #get the the examination the sample belongs to
-            p = list(app_db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+            p = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
             logger.info(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number}')
 
             if len(p) != 1:
@@ -495,15 +478,16 @@ def start_pipeline(config):
     if not, it runs the pipeline for the missing ones
     '''
 
-    app_db = get_db(get_db_url(config))
+    db = DB.from_config(config)
     poll_sequencer_output(config)
 
-    sequencer_runs = list(app_db.query('sequencer_runs/all'))
-    pipeline_runs = list(app_db.query('pipeline_runs/all'))
+    sequencer_runs = list(db.query('sequencer_runs/all'))
+    pipeline_runs = list(db.query('pipeline_runs/all'))
 
     sequencer_run_ids = set([str(Path(r['value']['original_path']).name) for r in sequencer_runs])
     pipeline_run_refs = set([str(Path(r['value']['sequencer_run_path']).name) for r in pipeline_runs])
     new_run_ids = sequencer_run_ids - pipeline_run_refs
+    logger.info(f'starting pipeline with {len(new_run_ids)} new runs')
 
     new_runs = list(filter(
         lambda x: str(Path(x['value']['original_path']).name) in new_run_ids, 
@@ -523,8 +507,8 @@ def start_pipeline(config):
             continue
 
         logger.info(f"starting pipeline for sequencer run {new_run['value']['original_path']}")
-        results = handle_sequencer_run(config, SequencerRun(True, **new_run['value']))
-        results.append(r)
+        result = handle_sequencer_run(config, SequencerRun(True, **new_run['value']))
+        results.append(result)
 
     return results
 
