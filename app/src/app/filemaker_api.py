@@ -34,6 +34,14 @@ class Filemaker:
 
         self._token = None
 
+    @staticmethod
+    def from_config(config):
+        fm = Filemaker(
+                config['filemaker_server'], 
+                config['filemaker_user'], 
+                config['filemaker_psw'])
+        return fm
+
     def _get_new_token(self):
         r = requests.post(
                 self.session_url, 

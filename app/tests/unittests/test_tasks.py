@@ -115,7 +115,7 @@ def test_retrieve_new_filemaker_data_incremental(monkeypatch, config, db, fm_moc
         return fm_mock
 
     monkeypatch.setattr(app.tasks, 'get_db', get_db_mock)
-    monkeypatch.setattr(app.tasks, 'get_filemaker', get_filemaker_mock)
+    monkeypatch.setattr(app.filemaker_api.Filemaker, 'from_config', get_filemaker_mock)
 
     retrieve_new_filemaker_data_incremental(config, backoff_time=0.01)
     #assert False

@@ -8,9 +8,6 @@ from app.db_utils import init_db
 from app.config import Config
 from app.ui import create_app
 
-import pycouchdb as couch
-
-
 @click.group()
 @click.option('--dev', is_flag=True, default=False)
 @click.option('--config', 

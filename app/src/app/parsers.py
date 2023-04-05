@@ -17,10 +17,6 @@ fastq_name = (
 def parse_fastq_name(name):
     return fastq_name.parse_string(name).as_dict()
 
-#d = parse_fastq_name(fastq_name_example)
-#molnumber = d['sample_name']
-
-
 #miseq_name_example = '220101_M01011_0111_000000000-A11A1'
 miseq_name = (
     Word(nums, exact=6)('date') + '_'
@@ -38,8 +34,5 @@ def parse_miseq_run_name(name):
     return miseq_name.parse_string(name).as_dict()
 
 
-#d = parse_miseq_run_name(miseq_name_example)
-#date = datetime.strptime(d['date'],'%y%m%d')
 def parse_date(datestr):
-    #return datetime.strptime(datestr, '%d/%m/%Y')
     return datetime.strptime(datestr, '%m/%d/%Y')

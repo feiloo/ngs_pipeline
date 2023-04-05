@@ -154,6 +154,8 @@ class Examination(BaseDocument):
     sequencer_runs: List[str]
     pipeline_runs: List[str]
     filemaker_record: Optional[dict]
+    last_sync_time: Optional[datetime]
+
     
 class Person(BaseDocument):
     names: List[str]

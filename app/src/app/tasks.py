@@ -16,6 +16,7 @@ from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
 
 from app.constants import testconfig, filemaker_examination_types_workflow_mapping, workflow_paths
+from app.config import Config
 from app.filemaker_api import Filemaker
 from app.db_utils import clean_init_filemaker_mirror
 from app.parsers import parse_date
@@ -32,28 +33,14 @@ def get_celery_config(config):
     }
     return celery_config
 
-with open('/etc/ngs_pipeline_config.json', 'r') as f:
-    config = json.loads(f.read())
+logger = get_task_logger(__name__)
 
-assert 'filemaker_server' in config
-assert 'filemaker_user' in config
-assert 'filemaker_psw' in config
-
+config = Config().dict()
 celery_config = get_celery_config(config)
 
 mq = Celery('ngs_pipeline', 
         **celery_config
         )
-
-logger = get_task_logger(__name__)
-
-
-def get_filemaker(config):
-    filemaker = Filemaker(
-            config['filemaker_server'], 
-            config['filemaker_user'], 
-            config['filemaker_psw'])
-    return filemaker
 
 
 def get_db_url(config):
@@ -90,7 +77,7 @@ def retrieve_new_filemaker_data_full(config, backoff_time=5):
     st = time.time()
     timeout = 2*60*60 # 2h in seconds
     off = 0
-    filemaker = get_filemaker(config)
+    filemaker = Filemaker.from_config(config)
 
     while 1:
         try:
@@ -124,7 +111,7 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
     rowid = -1
     app_state = db.get('app_state')
     last_synced_row = int(app_state['last_synced_filemaker_row'])
-    filemaker = get_filemaker(config)
+    filemaker = Filemaker.from_config(config)
     off = 0
 
     def make_fm_doc(r):
@@ -149,7 +136,6 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
             new_last_rowid = max(rowids)
             app_state['last_synced_filemaker_row'] = new_last_rowid
             newdocs = list(map(make_fm_doc, recs)) + [app_state]
-            #logger.debug(f"newdocs {newdocs}")
             db.save_bulk(newdocs)
 
             if time.time() > (st + timeout):
@@ -170,16 +156,10 @@ def transform_data(config):
 
     deleted_docs = []
     for p in app_db.query('patients/patients'):
-        #app_db.delete(p['value']['_id'])
         deleted_docs.append(p['value'])
-
-    logger.info(len(deleted_docs))
 
     for p in app_db.query('examinations/examinations'):
-        #app_db.delete(p['value']['_id'])
         deleted_docs.append(p['value'])
-
-    logger.info(len(deleted_docs))
 
     todelete = []
     for d in deleted_docs:
@@ -236,11 +216,9 @@ def transform_data(config):
                     examinations=[e.id for e in exams],
                     )
 
-            #app_db.save(patient.to_dict())
             docs_to_save.append(patient.to_dict())
 
             for e in exams:
-                #app_db.save(e.to_dict())
                 docs_to_save.append(e.to_dict())
 
             k = doc['key']
@@ -248,13 +226,6 @@ def transform_data(config):
 
     app_db.save_bulk(docs_to_save)
 
-@mq.task
-def poll_new_cases(app_db, config):
-    app_db = get_db(get_db_url(config))
-    #transform_data(config)
-
-    new_cases = app_db.query('examinations/new_examinations')
-    return new_cases
 
 @mq.task
 def sync_couchdb_to_filemaker(config):

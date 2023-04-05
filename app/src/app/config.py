@@ -40,5 +40,3 @@ class Config:
 
     def dict(self):
         return self.params.dict()
-
-
