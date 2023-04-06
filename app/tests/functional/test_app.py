@@ -2,7 +2,8 @@ import pycouchdb as couch
 from time import sleep
 import pytest
 
-from app.tasks import get_db
+from app.db_utils import DB
+#from app.tasks import get_db
 from app.ui import create_app
 from app.db_utils import init_db
 from app.constants import testconfig
@@ -68,7 +69,6 @@ def rabbitmq_server(config):
 @pytest.fixture()
 def db(couchdb_server, config):
     s = couchdb_server
-    #app_db = s.create('ngs_app')
     db = init_db(config)
     yield db
     res = s.delete('ngs_app')
@@ -92,12 +92,6 @@ def client(app):
 @pytest.fixture()
 def runner(app):
     return app.test_cli_runner()
-
-
-@pytest.fixture()
-def app_db(app):
-    with app.app_context():
-        return get_db(app)
 
 
 @pytest.fixture(scope='session')
@@ -139,17 +133,3 @@ def test_pipeline_status(config, db):
         assert res.status_code == 200
         #print(res.data)
 
-
-'''
-def test_poll_sequencer_output(app_db, app):
-    init_doc = {"_id":"sequencer_runs", 
-            "run_names": [],
-            }
-
-    res = app_db.put(init_doc)
-
-    with app.app_context():
-        _start_pipeline(app_db)
-        res = app_db.get('sequencer_runs')
-        assert res['run_names'] == ['220831_M03135_0376_000000000-KHR5V']
-'''
