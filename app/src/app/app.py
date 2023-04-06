@@ -4,7 +4,7 @@ import click
 
 from app.constants import *
 from app.tasks import mq, get_celery_config 
-from app.db_utils import init_db
+from app.db import DB
 from app.config import Config
 from app.ui import create_app
 
@@ -24,7 +24,10 @@ def main(ctx, dev, config):
 @click.pass_context
 def init(ctx):
     config = ctx.obj['config']
-    init_db(config)
+    db = DB.from_config(config)
+    db.init_db()
+    
+# init_db(config)
 
 @main.command()
 @click.pass_context

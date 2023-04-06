@@ -95,7 +95,7 @@ def test_handle_sequencer_run(monkeypatch, config, sequencer_run, db):
         return MockDB()
 
     monkeypatch.setattr(app.tasks, 'start_panel_workflow', start_panel_workflow_mock)
-    monkeypatch.setattr(app.db_utils.DB, 'from_config', get_db_mock)
+    monkeypatch.setattr(app.db.DB, 'from_config', get_db_mock)
     
     workflow_inputs=[]
     panel_type=''
@@ -114,7 +114,7 @@ def test_retrieve_new_filemaker_data_incremental(monkeypatch, config, db, fm_moc
     def get_filemaker_mock(*args, **kwargs):
         return fm_mock
 
-    monkeypatch.setattr(app.db_utils.DB, 'from_config', get_db_mock)
+    monkeypatch.setattr(app.db.DB, 'from_config', get_db_mock)
     monkeypatch.setattr(app.filemaker_api.Filemaker, 'from_config', get_filemaker_mock)
 
     retrieve_new_filemaker_data_incremental(config, backoff_time=0.01)

@@ -18,7 +18,7 @@ from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker
 from app.constants import testconfig, filemaker_examination_types_workflow_mapping, workflow_paths
 from app.config import Config
 from app.filemaker_api import Filemaker
-from app.db_utils import clean_init_filemaker_mirror, DB
+from app.db import clean_init_filemaker_mirror, DB
 from app.parsers import parse_date
 from uuid import UUID, uuid4
 

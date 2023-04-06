@@ -2,10 +2,8 @@ import pycouchdb as couch
 from time import sleep
 import pytest
 
-from app.db_utils import DB
-#from app.tasks import get_db
+from app.db import DB
 from app.ui import create_app
-from app.db_utils import init_db
 from app.constants import testconfig
 
 import subprocess
@@ -69,7 +67,7 @@ def rabbitmq_server(config):
 @pytest.fixture()
 def db(couchdb_server, config):
     s = couchdb_server
-    db = init_db(config)
+    db = DB.init_db(config)
     yield db
     res = s.delete('ngs_app')
 
@@ -132,4 +130,5 @@ def test_pipeline_status(config, db):
         res = test_client.get('/pipeline_status')
         assert res.status_code == 200
         #print(res.data)
+
 

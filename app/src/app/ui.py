@@ -9,7 +9,7 @@ from app.model import panel_types, SequencerInputSample, TrackingForm, Examinati
 
 from app.samplesheet import read_samplesheet
 from app.tasks import start_pipeline, sync_couchdb_to_filemaker
-from app.db_utils import get_db_url
+from app.db import get_db_url
 
 import pycouchdb as couch
 

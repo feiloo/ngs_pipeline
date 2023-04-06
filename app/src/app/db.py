@@ -1,71 +1,5 @@
 import pycouchdb as couch
 
-
-def _get_db_url(config):
-    user = config['couchdb_user']
-    psw = config['couchdb_psw']
-    host = 'localhost'
-    port = 5984
-    url = f"http://{user}:{psw}@{host}:{port}"
-    return url
-
-class DB(couch.client.Database):
-    @staticmethod
-    def from_config(config):
-        url = _get_db_url(config)
-        server = couch.Server(url)
-        #app_db = server.database('ngs_app')
-        name = 'ngs_app'
-
-        # origin from https://github.com/histrio/py-couchdb/blob/919f2f36a2b11c3e460f2014c20c106c0db11523/pycouchdb/client.py#L157
-        (r, result) = server.resource.head(name)
-        if r.status_code == 404:
-                raise exp.NotFound("Database '{0}' does not exists".format(name))
-
-        db = DB(server.resource(name),name)
-        return db
-
-    def save_obj(self, obj):
-        ''' save the pydantic object '''
-        o = self.save(obj.to_dict())
-        return obj.from_dict(o)
-
-def get_db_url(app):
-    host = app.config['data']['couchdb_host']
-    user = app.config['data']['couchdb_user']
-    psw = app.config['data']['couchdb_psw']
-    port = 5984
-    url = f"http://{user}:{psw}@{host}:{port}"
-    return url
-
-def clean_init_filemaker_mirror():
-    server = couch.Server(url)
-    try:
-        server.delete('filemaker_mirror')
-    except:
-        pass
-
-    server.create('filemaker_mirror')
-    db = server.database('filemaker_mirror')
-
-    filemaker_mirror_patient_grouping_map_fn = '''
-    function (doc) {
-        emit([doc.Name, doc.Vorname, doc.GBD, doc.Zeitstempel], doc);
-    }
-    '''
-
-    response = db.save(
-        {
-            "_id": '_design/filemaker', 
-            'views':
-            {
-            'all':{"map":filemaker_map_fn},
-            }
-        }
-        )
-
-    return db
-
 def setup_views(app_db):
     if 'app_state' not in app_db:
         app_state = {
@@ -230,7 +164,82 @@ def setup_views(app_db):
         })
 
 
-def init_db(config):
+def _get_db_url(config):
+    user = config['couchdb_user']
+    psw = config['couchdb_psw']
+    host = 'localhost'
+    port = 5984
+    url = f"http://{user}:{psw}@{host}:{port}"
+    return url
+
+class DB(couch.client.Database):
+    @staticmethod
+    def init_db(config):
+        server = couch.Server(_get_db_url(config))
+        server.create('ngs_app')
+        db = DB.from_config(config)
+        setup_views(db)
+
+        return db
+
+    @staticmethod
+    def from_config(config):
+        url = _get_db_url(config)
+        server = couch.Server(url)
+        #app_db = server.database('ngs_app')
+        name = 'ngs_app'
+
+        # origin from https://github.com/histrio/py-couchdb/blob/919f2f36a2b11c3e460f2014c20c106c0db11523/pycouchdb/client.py#L157
+        (r, result) = server.resource.head(name)
+        if r.status_code == 404:
+                raise exp.NotFound("Database '{0}' does not exists".format(name))
+
+        db = DB(server.resource(name), name)
+        return db
+
+    def save_obj(self, obj):
+        ''' save the pydantic object '''
+        o = self.save(obj.to_dict())
+        return obj.from_dict(o)
+
+def get_db_url(app):
+    host = app.config['data']['couchdb_host']
+    user = app.config['data']['couchdb_user']
+    psw = app.config['data']['couchdb_psw']
+    port = 5984
+    url = f"http://{user}:{psw}@{host}:{port}"
+    return url
+
+def clean_init_filemaker_mirror():
+    server = couch.Server(url)
+    try:
+        server.delete('filemaker_mirror')
+    except:
+        pass
+
+    server.create('filemaker_mirror')
+    db = server.database('filemaker_mirror')
+
+    filemaker_mirror_patient_grouping_map_fn = '''
+    function (doc) {
+        emit([doc.Name, doc.Vorname, doc.GBD, doc.Zeitstempel], doc);
+    }
+    '''
+
+    response = db.save(
+        {
+            "_id": '_design/filemaker', 
+            'views':
+            {
+            'all':{"map":filemaker_map_fn},
+            }
+        }
+        )
+
+    return db
+
+
+def init_db2(config):
     user = config['couchdb_user']
     psw = config['couchdb_psw']
     host = config['couchdb_host']
