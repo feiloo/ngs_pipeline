@@ -27,16 +27,19 @@ class Config:
     def __init__(self, dev: bool=False, path:Path=None):
         if dev == True:
             cfg = testconfig
-
-        if path is None:
-            p = Path('/etc/ngs_pipeline_config.json')
         else:
-            p = path
+            if path is None:
+                p = Path('/etc/ngs_pipeline_config.json')
+            else:
+                p = path
 
-        with p.open('r') as f:
-            cfg = json.loads(f.read())
+            with p.open('r') as f:
+                cfg = json.loads(f.read())
 
         self.params = ConfigParams(**cfg)
+
+    def __getitem__(self, k):
+        return self.dict()[k]
 
     def dict(self):
         return self.params.dict()

@@ -1,10 +1,11 @@
 import pytest
 
 from app.constants import testconfig
+from app.config import Config
 
 @pytest.fixture(scope='session')
 def config():
-    return testconfig
+    return Config(dev=True)
 
 ''' sythetic example record
 '''
@@ -77,7 +78,6 @@ def fm_mock():
 # marker for incremental tests, see https://docs.pytest.org/en/7.1.x/example/simple.html 
 
 from typing import Dict, Tuple
-import pytest
 
 # store history of failures per test class name and per index in parametrize (if parametrize used)
 _test_failed_incremental: Dict[str, Dict[Tuple[int, ...], str]] = {}

@@ -187,7 +187,6 @@ def pipeline_status():
 
 def create_app(config):
     app = Flask(__name__)
-    app.secret_key = config.pop('app_secret_key')
     app.config['data'] = config
 
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER

@@ -4,12 +4,12 @@ import pytest
 
 from app.db import DB
 from app.ui import create_app
-from app.constants import testconfig
 
 import subprocess
 import time
 
 from app.tasks import get_celery_config, start_pipeline
+from app.app import main
 
 from click.testing import CliRunner
 
@@ -91,6 +91,9 @@ def client(app):
 def runner(app):
     return app.test_cli_runner()
 
+@pytest.fixture()
+def cli_runner():
+    return CliRunner()
 
 @pytest.fixture(scope='session')
 def celery_config(config):
@@ -119,16 +122,16 @@ def test_create_document(db):
     res.pop('_rev')
     assert res == init_doc
 
-
-def test_db_init_db(config, db):
-    assert db != None
-
 def test_pipeline_status(config, db):
     app_db = db 
     app = create_app(config)
     with app.test_client() as test_client:
         res = test_client.get('/pipeline_status')
         assert res.status_code == 200
-        #print(res.data)
 
-
+@pytest.mark.incremental
+class TestAppStart:
+    def test_init_db(self, config, cli_runner):
+        result = cli_runner.invoke(main, ['--dev','init'])
+        print(result.output)
+        assert result.exit_code == 0

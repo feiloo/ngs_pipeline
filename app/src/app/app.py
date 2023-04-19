@@ -24,11 +24,9 @@ def main(ctx, dev, config):
 @click.pass_context
 def init(ctx):
     config = ctx.obj['config']
+    DB.init_db(config)
     db = DB.from_config(config)
-    db.init_db()
     
-# init_db(config)
-
 @main.command()
 @click.pass_context
 def run(ctx):

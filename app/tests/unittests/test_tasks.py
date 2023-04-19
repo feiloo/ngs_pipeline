@@ -54,10 +54,8 @@ class MockDB:
     def save(self, doc, *args, **kwargs):
         self.k+=1
         self.data[self.k] = doc
-        print(doc)
 
     def save_bulk(self, docs, *args, **kwargs):
-        print(docs)
         for d in docs:
             self.k+=1
             self.data[self.k] = d
