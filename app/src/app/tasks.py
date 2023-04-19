@@ -2,45 +2,42 @@ from celery import Celery, chain, group
 from celery.utils.log import get_task_logger
 from celery.contrib.abortable import AbortableTask
 
-import pycouchdb as couch
 from pathlib import Path
 from datetime import datetime
 import subprocess
-import json
 import tempfile
 import logging
 import time
-import json
+from itertools import count
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
 
-from app.constants import testconfig, filemaker_examination_types_workflow_mapping, workflow_paths
+from app.constants import filemaker_examination_types_workflow_mapping, workflow_paths
 from app.config import Config
 from app.filemaker_api import Filemaker
-from app.db import clean_init_filemaker_mirror, DB
+from app.db import DB
 from app.parsers import parse_date
 from uuid import UUID, uuid4
 
 # for sigint
 import signal
 
-
-def get_celery_config(config):
-    celery_config = { 
-      'backend': f'couchdb://{config["couchdb_user"]}:{config["couchdb_psw"]}@localhost:5984/pipeline_results',
-      'broker': f'pyamqp://{config["rabbitmq_user"]}:{config["rabbitmq_psw"]}@localhost//',
-    }
-    return celery_config
-
 logger = get_task_logger(__name__)
 
 config = Config().dict()
-celery_config = get_celery_config(config)
 
 mq = Celery('ngs_pipeline', 
-        **celery_config
+        **Config().celery_config()
         )
+
+class Timeout:
+    def __init__(self, seconds):
+        self.starttime = time.time()
+        self.length = seconds
+
+    def reached(self):
+        return time.time() > (self.starttime + self.length)
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
@@ -58,83 +55,71 @@ def setup_periodic_tasks(sender, **kwargs):
     '''
 
 def retrieve_new_filemaker_data_full(config, backoff_time=5):
-    #db = get_db(get_db_url(config))
     db = DB.from_config(config)
 
-    st = time.time()
-    timeout = 2*60*60 # 2h in seconds
-    off = 0
+    timeout = Timeout(2*60*60) # 2h in seconds
     filemaker = Filemaker.from_config(config)
 
-    while 1:
+    for batches_done in count():
         try:
             # backoff for a few seconds
             time.sleep(backoff_time)
-            resp = filemaker.get_all_records(offset=off*1000+1)
-            recs = resp['data']
-            for i,r in enumerate(recs):
+            response = filemaker.get_all_records(offset=batches_done*1000+1, limit=1000)
+            records = response['data']
+            for i,r in enumerate(records):
                 d = r['fieldData']
                 d['document_type']='filemaker_record'
                 db.save(d)
                 logger.debug(f"saved {i}")
 
-            if time.time() > (st + timeout):
-                raise RuntimeError('database sync timed out')
+            if timeout.reached():
+                raise RuntimeError('database sync timed out took too long in total')
         except Exception as e:
-            logger.warning(f'cant export with offset {i} or database timed out with error: {e}')
+            logger.warning(f'cant export batch {batches_done} or database timed out with error: {e}')
             break
-
-        off += 1
 
     return db
 
 
 def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
-    #db = get_db(get_db_url(config))
     db = DB.from_config(config)
 
-    st = time.time()
-    timeout = 2*60*60 # 2h in seconds
+    timeout = Timeout(2*60*60) # 2h in seconds
 
-    rowid = -1
     app_state = db.get('app_state')
     last_synced_row = int(app_state['last_synced_filemaker_row'])
     filemaker = Filemaker.from_config(config)
-    off = 0
 
     def make_fm_doc(r):
         d = r['fieldData']
         d['document_type']='filemaker_record'
         return d
 
-    while 1:
+    for batches_done in count():
         try:
             # backoff for a few seconds
             time.sleep(backoff_time)
-            resp = filemaker.get_all_records(offset=off*1000+last_synced_row+1, limit=1000)
-            recs = list(resp['data'])
-            logger.debug(f"retrieved {len(recs)} filemaker_rows")
-            logger.debug(f"last_synced_row_was {last_synced_row} and record id was {recs[0]['recordId']}")
+            response = filemaker.get_all_records(offset=batches_done*1000+last_synced_row+1, limit=1000)
+            records = list(response['data'])
+            logger.debug(f"retrieved {len(records)} filemaker_rows")
+            logger.debug(f"last_synced_row_was {last_synced_row} and record id was {records[0]['recordId']}")
 
-            if last_synced_row >= int(recs[0]['recordId']):
+            if last_synced_row >= int(records[0]['recordId']):
                 raise RuntimeError('record id doesnt match last_synced_row')
 
-            rowids = list(map(lambda x: int(x['recordId']), recs))
-            logger.debug(f"rowids: {rowids}")
-            new_last_rowid = max(rowids)
-            app_state['last_synced_filemaker_row'] = new_last_rowid
-            newdocs = list(map(make_fm_doc, recs)) + [app_state]
+            rowids = list(map(lambda x: int(x['recordId']), records))
+            app_state['last_synced_filemaker_row'] = max(rowids)
+            newdocs = list(map(make_fm_doc, records)) + [app_state]
             db.save_bulk(newdocs)
+            logger.debug(f"rowids: {rowids}")
 
-            if time.time() > (st + timeout):
+            if timeout.reached():
                 raise RuntimeError('database sync timed out took too long in total')
         except Exception as e:
-            logger.warning(f'cant export with offset {off} or database timed out with error: {e}')
+            logger.warning(f'cant export batch {batches_done} or database timed out with error: {e}')
             break
 
-        off += 1
-
-    return off
+    return batches_done
 
 
 

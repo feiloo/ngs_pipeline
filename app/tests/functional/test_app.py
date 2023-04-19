@@ -1,5 +1,4 @@
 import pycouchdb as couch
-from time import sleep
 import pytest
 
 from app.db import DB
@@ -8,7 +7,7 @@ from app.ui import create_app
 import subprocess
 import time
 
-from app.tasks import get_celery_config, start_pipeline
+from app.tasks import start_pipeline
 from app.app import main
 
 from click.testing import CliRunner
@@ -97,7 +96,7 @@ def cli_runner():
 
 @pytest.fixture(scope='session')
 def celery_config(config):
-    return get_celery_config(config)
+    return config.celery_config()
 
 @pytest.mark.skip()
 def test_start_pipeline():
@@ -133,5 +132,4 @@ def test_pipeline_status(config, db):
 class TestAppStart:
     def test_init_db(self, config, cli_runner):
         result = cli_runner.invoke(main, ['--dev','init'])
-        print(result.output)
         assert result.exit_code == 0

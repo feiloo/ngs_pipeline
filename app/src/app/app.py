@@ -3,7 +3,7 @@ import logging
 import click
 
 from app.constants import *
-from app.tasks import mq, get_celery_config 
+from app.tasks import mq
 from app.db import DB
 from app.config import Config
 from app.ui import create_app
@@ -17,21 +17,21 @@ from app.ui import create_app
 def main(ctx, dev, config):
     cfg = Config(dev=dev, path=config)
     ctx.ensure_object(dict)
-    ctx.obj['config'] = cfg.dict()
+    ctx.obj['config'] = cfg
 
 
 @main.command()
 @click.pass_context
 def init(ctx):
     config = ctx.obj['config']
-    DB.init_db(config)
-    db = DB.from_config(config)
+    DB.init_db(config.dict())
+    db = DB.from_config(config.dict())
     
 @main.command()
 @click.pass_context
 def run(ctx):
     config = ctx.obj['config']
-    app = create_app(config)
+    app = create_app(config.dict())
     app.run(host='0.0.0.0', port=8000, debug=True)
 
 
@@ -39,7 +39,7 @@ def run(ctx):
 @click.pass_context
 def worker(ctx):
     config = ctx.obj['config']
-    mq.conf.update(get_celery_config(config))
+    mq.conf.update(config.celery_config())
     worker = mq.Worker(
             include=['app.app'],
 	    loglevel=logging.DEBUG,
@@ -51,8 +51,9 @@ def worker(ctx):
 def beat(ctx):
     from celery.apps.beat import Beat
     config = ctx.obj['config']
-    mq.conf.update(get_celery_config(config))
+    mq.conf.update(config.celery_config())
     b = Beat(app=mq,
+            schedule='/tmp/ngs_pipeline_beat_schedule',
 	    loglevel=logging.DEBUG,
             )
     b.run()

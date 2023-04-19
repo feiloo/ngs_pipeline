@@ -14,7 +14,7 @@ def setup_views(app_db):
     function (doc) {
       if(doc.document_type){
         if(doc.document_type == 'sequencer_run')
-          emit(doc._id, doc);
+          emit(doc.parsed.date, doc);
           }
       }
     '''
@@ -30,7 +30,7 @@ def setup_views(app_db):
     function (doc) {
       if(doc.document_type){
         if(doc.document_type == 'pipeline_run')
-          emit(doc._id, doc);
+          emit(doc.created_time, doc);
           }
       }
     '''
@@ -48,7 +48,7 @@ def setup_views(app_db):
     function (doc) {
       if(doc.document_type){
         if(doc.document_type == 'examination'){
-          emit(doc._id, doc);
+          emit(doc.started_date, doc);
         }
       }
     }

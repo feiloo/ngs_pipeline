@@ -43,3 +43,10 @@ class Config:
 
     def dict(self):
         return self.params.dict()
+
+    def celery_config(self):
+        celery_config = { 
+          'backend': f'couchdb://{self["couchdb_user"]}:{self["couchdb_psw"]}@localhost:5984/pipeline_results',
+          'broker': f'pyamqp://{self["rabbitmq_user"]}:{self["rabbitmq_psw"]}@localhost//',
+        }
+        return celery_config
