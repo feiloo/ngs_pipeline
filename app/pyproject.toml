@@ -8,6 +8,7 @@ build-backend = "setuptools.build_meta"
 name = "ngs_pipeline"
 version = "0.0.1"
 dependencies = [
+"gunicorn",
 "flask",
 "requests",
 "pycouchdb",
@@ -20,12 +21,18 @@ dependencies = [
 "more_itertools",
 "miniwdl @ git+https://github.com/chanzuckerberg/miniwdl.git",
 "pytest-celery",
+"mypy",
+"pep8",
 ]
 
 [tool.pytest.ini_options]
 addopts = [
     "--import-mode=importlib",
     ]
+markers = [
+    "incremental"
+    ]
 
 [project.scripts]
 ngs_pipeline = "app.app:main"
+
