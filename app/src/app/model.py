@@ -155,6 +155,7 @@ class Examination(BaseDocument):
     pipeline_runs: List[str]
     filemaker_record: Optional[dict]
     last_sync_time: Optional[datetime]
+    result: Optional[str]
 
     
 class Person(BaseDocument):

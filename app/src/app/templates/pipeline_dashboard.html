@@ -27,13 +27,31 @@ td {
   Pipeline Version: {{ pipeline_version }}
  </div>
 
- <div>
+ <!--
   Progress:
   <div>
    <progress value="{{pipeline_progress}}" max="100"> {{pipeline_progress}}% </progress>
   </div>
+ -->
+
+ <div>
   <div>
    Pipeline status: {{ pipeline_status }}
+  </div>
+  <div>
+   Pipeline autorun: {{ pipeline_autorun }}
+  </div>
+  <div>
+   Pipeline schedule: {{ pipeline_schedule }}
+  </div>
+
+  <div>
+   <form method=post name="pipeline_autorun_enable" action='/pipeline_autorun_enable' style='display: inline-block;'>
+    <button type="submit" value="pipeline_autorun_enable">enable pipeline autoruning</button>
+   </form>
+   <form method=post name="pipeline_autorun_disable" action='/pipeline_autorun_disable' style='display: inline-block;'>
+    <button type="submit" value="pipeline_autorun_disable">disable pipeline autoruning</button>
+   </form>
   </div>
 
   <div>
@@ -54,11 +72,13 @@ td {
 	    <tr>
 		<th>Mol_NR</th>
 		<th>examinationtype</th>
+		<th>result</th>
 	    </tr>
 	    {% for exam in examinations %}
 	    <tr>
 		<td><nobr><data>{{ exam['filemaker_record']['Mol_NR'] }}<data></td>
 		<td><nobr><data>{{ exam['examinationtype'] }}<data></td>
+		<td><nobr><data>{{ exam['result'] }}<data></td>
 	    </tr>
 	    {% endfor %}
 	    </table>
@@ -95,18 +115,24 @@ td {
 	    <textarea readonly>{{ run['logs']['stdout'] }}</textarea> -->
 
 	    <td>
-		    <div style="overflow:scroll;height:200px;width:">
-		    {% for l in run['input_samples'] %}
-		    <nobr>{{l}}<br>
-	    	    {% endfor %}
-		    </div>
+		    <details>
+		    <summary> input samples </summary>
+			    <div style="overflow:scroll;height:200px;width:">
+			    {% for l in run['input_samples'] %}
+			    <nobr>{{l}}<br>
+			    {% endfor %}
+			    </div>
+		    </details>
 	    </td>
 	    <td>
-		    <div style="overflow:scroll;height:200px;width:">
-		    {% for l in run['logs']['stdout'].split('\n') %}
-		    <nobr>{{l}}<br>
-	    	    {% endfor %}
-		    </div>
+		    <details>
+		    <summary> logs </summary>
+			    <div style="overflow:scroll;height:200px;width:">
+			    {% for l in run['logs']['stdout'].split('\n') %}
+			    <nobr>{{l}}<br>
+			    {% endfor %}
+			    </div>
+		    </details>
 	    </td>
     </tr>
     {% endfor %}

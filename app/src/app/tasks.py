@@ -203,7 +203,7 @@ def transform_data(config):
 
 @mq.task
 def sync_couchdb_to_filemaker(config):
-    retrieve_new_filemaker_data_incremental(config)
+    #retrieve_new_filemaker_data_incremental(config)
     transform_data(config)
 
 

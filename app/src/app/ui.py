@@ -34,8 +34,10 @@ def get_db(app):
 
 def _get_pipeline_dashboard_html():
     progress = 0
-    pipeline_runs = list(get_db(current_app).query('pipeline_runs/all'))
+    db = get_db(current_app)
+    pipeline_runs = list(db.query('pipeline_runs/all'))
     p = [x['value'] for x in pipeline_runs]
+
 
     dn = datetime.now()
     for pr in p:
@@ -52,12 +54,19 @@ def _get_pipeline_dashboard_html():
         return d
 
     examinations = [unserialize(x['value']) for x in e]
+    settings = db.get('app_settings')
+    pipeline_schedule = settings['schedule']
+    autorun = settings['autorun_pipeline']
+
+    pipeline_status = 'online'
 
     return render_template('pipeline_dashboard.html', 
             examinations=examinations,
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
-            pipeline_status='running',
+            pipeline_status=f'{pipeline_status}',
+            pipeline_autorun=autorun,
+            pipeline_schedule=pipeline_schedule,
             pipeline_runs=reversed(sorted(p, key=lambda x: datetime.fromisoformat(x['created_time']))),
             sequencer_runs=reversed(sorted(r, key=lambda x: datetime.fromisoformat(x['indexed_time']))),
             panel_types=panel_types
@@ -183,6 +192,22 @@ def pipeline_status():
     current_app.logger.info('pipeline status')
     return _get_pipeline_dashboard_html()
 
+@admin.route("/pipeline_autorun_enable", methods=['POST'])
+def pipeline_autorun_enable():
+    db = get_db(current_app)
+    settings = db.get('app_settings')
+    settings['autorun_pipeline'] = True
+    db.save(settings)
+    return redirect('/pipeline_status')
+    
+
+@admin.route("/pipeline_autorun_disable", methods=['POST'])
+def pipeline_autorun_disable():
+    db = get_db(current_app)
+    settings = db.get('app_settings')
+    settings['autorun_pipeline'] = False
+    db.save(settings)
+    return redirect('/pipeline_status')
 
 
 def create_app(config):
