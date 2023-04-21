@@ -41,8 +41,9 @@ class Timeout:
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
-    sig = start_pipeline.signature(args=(config,))
-    sender.add_periodic_task(300.0, sig, name='start pipeline every 300s')
+    #sig = start_pipeline.signature(args=(config,))
+    sig = run_schedule.signature(args=(config,))
+    sender.add_periodic_task(10.0, sig, name='check for dynamically scheduled tasks')
 
     # sender.add_periodic_task(300.0, sig, name='sync filemaker to couchdb')
     # Executes every day at midnight
@@ -497,3 +498,53 @@ def start_pipeline(config):
 
     return results
 
+
+class Schedule:
+    def __init__(self, db):
+        self.db = db
+
+    def acquire_lock(self):
+        app_state = self.db.get('app_state')
+        if app_state['sync_running'] == True:
+            logger.debug('sync already running')
+            raise RuntimeError()
+        else:
+            logger.debug('sync not running, acquiring sync state')
+            app_state['sync_running'] = True
+            self.db.save(app_state)
+
+    def release_lock(self):
+        app_state = self.db.get('app_state')
+        #app_state['sync_running'] = False
+        self.db.save(app_state)
+
+    def is_enabled(self):
+        default_app_settings = {
+            '_id':'app_settings',
+            'schedule': '',
+            'autorun_pipeline':False
+        }
+
+        settings = self.db.get('app_settings')
+        return settings['autorun_pipeline'] == True
+
+
+    def has_work_now(self):
+        settings = self.db.get('app_settings')
+        return settings['schedule'] == ''
+
+
+@mq.task
+def run_schedule(config):
+    db = DB.from_config(config)
+    schedule = Schedule(db)
+    schedule.acquire_lock()
+
+    try:
+        if schedule.is_enabled() and schedule.has_work_now():
+            s1 = sync_couchdb_to_filemaker.s(config)
+            s2 = start_pipeline.s(config)
+            res = chain(s1, s2)
+            res.apply_async()
+    finally:
+        schedule.release_lock()

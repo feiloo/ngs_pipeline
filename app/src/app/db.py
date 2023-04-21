@@ -4,10 +4,20 @@ def setup_views(app_db):
     if 'app_state' not in app_db:
         app_state = {
                 '_id': 'app_state',
-                'last_synced_filemaker_row':-1
+                'last_synced_filemaker_row':-1,
+                'sync_running': False
                 }
 
         app_db.save(app_state)
+
+    if 'app_settings' not in app_db:
+        default_app_settings = {
+            '_id':'app_settings',
+            'schedule': [''],
+            'autorun_pipeline':True
+        }
+
+        app_db.save(default_app_settings)
 
 
     sequencer_map_fn = '''

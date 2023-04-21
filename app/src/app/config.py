@@ -19,7 +19,7 @@ class ConfigParams(BaseModel):
     filemaker_psw: str
     miseq_output_folder: str
     dev: str
-    app_secret_key: bytes
+    app_secret_key: str
     workflow_output_dir: str
 
 

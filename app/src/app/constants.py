@@ -75,7 +75,7 @@ testconfig = {
         'rabbitmq_psw':'testpsw',
         'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
         "dev":'true',
-        "app_secret_key": b'_5#y2L"F4Q8z\n\xec]/'
+        "app_secret_key": '_5#y2L"F4Q8z\n\xec]/'
         }
 
 
