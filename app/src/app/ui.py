@@ -9,7 +9,7 @@ from app.model import panel_types, SequencerInputSample, TrackingForm, Examinati
 
 from app.samplesheet import read_samplesheet
 from app.tasks import start_pipeline, sync_couchdb_to_filemaker
-from app.db import get_db_url
+from app.db import DB
 
 import pycouchdb as couch
 
@@ -20,21 +20,16 @@ UPLOAD_FOLDER = '/tmp/uploads'
 admin = Blueprint('admin', __name__, url_prefix='/')
 
 def get_db(app):
-    url = get_db_url(app)
-
-    if 'server' not in g:
-        server = couch.Server(url)
-        g.server = server
     if 'app_db' not in g:
-        app_db = server.database('ngs_app')
-        g.app_db = app_db
+        db = DB.from_config(app.config['data'])
+        g.app_db = db
 
     return g.app_db
 
 
 def _get_pipeline_dashboard_html():
-    progress = 0
     db = get_db(current_app)
+    progress = 0
     pipeline_runs = list(db.query('pipeline_runs/all'))
     p = [x['value'] for x in pipeline_runs]
 
@@ -43,10 +38,10 @@ def _get_pipeline_dashboard_html():
     for pr in p:
         pr['age'] = dn - datetime.fromisoformat(pr['created_time'])
     
-    sequencer_runs = list(get_db(current_app).query('sequencer_runs/all?limit10&descending=true'))
+    sequencer_runs = list(db.query('sequencer_runs/all?limit10&descending=true'))
     r = [x['value'] for x in sequencer_runs]
 
-    e = list(get_db(current_app).query('examinations/examinations?limit=10&skip=10&descending=true'))
+    e = list(db.query('examinations/examinations?limit=10&skip=10&descending=true'))
 
     def unserialize(x):
         d = x
@@ -128,11 +123,12 @@ def tracking_form():
 
 @admin.route("/select_case_to_run", methods=['POST'])
 def select_case_to_run():
+    db = get_db(current_app)
     case_molnr = request.args.get('case_molnr')
 
-    selected_cases = get_db(current_app).get('selected_cases')
+    selected_cases = db.get('selected_cases')
     selected_cases['cases'] = list(set(selected_cases['cases'] + [case_molnr]))
-    get_db(current_app).save(selected_cases)
+    db.save(selected_cases)
 
     print(case_molnr)
     return redirect('/tracking_form')
@@ -176,13 +172,14 @@ def stop_pipeline():
 
 @admin.route("/save_panel_type", methods=['POST'])
 def save_panel_type():
+    db = get_db(current_app)
     sequencer_run_id = request.args.get('run_id')
-    run = get_db(current_app).get(sequencer_run_id)
+    run = db.get(sequencer_run_id)
     if run['panel_type'] != 'invalid':
         print('error panel_type is already set')
     else:
         run['panel_type'] = request.form['panel_type']
-        get_db(current_app).save(run)
+        db(current_app).save(run)
 
     return redirect('/pipeline_status')
 
