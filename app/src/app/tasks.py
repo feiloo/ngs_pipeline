@@ -8,7 +8,8 @@ import subprocess
 import tempfile
 import logging
 import time
-from itertools import count
+from itertools import count, groupby
+from more_itertools import chunked
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
@@ -116,6 +117,7 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
 
             if timeout.reached():
                 raise RuntimeError('database sync timed out took too long in total')
+
         except Exception as e:
             logger.warning(f'cant export batch {batches_done} or database timed out with error: {e}')
             break
@@ -123,82 +125,122 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
     return batches_done
 
 
+def create_examinations(config):
+    db = DB.from_config(config)
+
+    logger.info('creating examinations')
+
+    new_records = []
+    duplicate_examinations = []
+    for p in db.query('filemaker/all?group_level=1&'):
+        if p['value'] < 1:
+            new_records.append(p['key'][0])
+        elif p['value'] > 1:
+            duplicate_examinations.append(p['key'][0])
+
+    logger.info('finished grouping filemaker records, starting creating examinations')
+
+    for i, p in enumerate(new_records):
+        filemaker_record = db.get(p)
+        d = filemaker_record
+
+        exam = Examination(
+                map_id=False,
+                id=str(uuid4()),
+                examinationtype=d['Untersuchung'], 
+                started_date=parse_date(d['Zeitstempel']),
+                sequencer_runs=[],
+                pipeline_runs=[],
+                filemaker_record=d
+                )
+        db.save(exam.to_dict())
+
+        if i % 1000==0:
+            logger.info('created {i} examinations and continuing')
+
+
+def aggregate_patients(config):
+    db = DB.from_config(config)
+    logger.info('aggregating patients')
+    it = list(db.query('patients/patient_aggregation?include_docs=true'))
+    logger.info('grouping examinations for patient aggregation')
+
+    for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'])):
+        g = list(group)
+
+        if i == 0:
+            logger.info(f'groups: {g}')
+
+        patient_entries = list(filter(
+            lambda d: d['doc']['document_type'] == 'patient',
+            g
+            ))
+        examination_docs = list(filter(
+            lambda d: d['doc']['document_type'] == 'examination',
+            g
+            ))
+        examinations = list(map(
+            lambda e: Examination(True, **e['doc']), 
+            examination_docs
+            ))
+
+        if i == 0:
+            logger.info(f'examinations: {examinations}')
+
+        examinations_ids = [e.id for e in examinations]
+
+        if len(patient_entries) > 1:
+            raise RuntimeError(f'too many patient objects for examination group: {g}')
+        elif len(patient_entries) == 1:
+            pd = patient_entries[0]
+            pd.pop('_rev')
+            pd['examinations'] = examination_ids
+            p = Patient.from_dict(pd)
+            db.save(Patient.to_dict())
+        else:
+            # no patient exists for the examinations
+            names = list(map(
+                lambda e: f"{e.filemaker_record['Vorname']}, {e.filemaker_record['Name']}",
+                examinations))
+
+            if len({e.filemaker_record['GBD'] for e in examinations}) != 1:
+                logger.error(f'examination group {examinations} has multiple birthdates')
+
+            if len({e.filemaker_record['Geschlecht'] for e in examinations}) != 1:
+                logger.warn(f'detected gender change in patient of examinations {examinations}')
+
+            gend = list(sorted(
+                    examinations,
+                    key=lambda e: 
+                        datetime.strptime(
+                            e.filemaker_record['Zeitstempel'],
+                            '%m/%d/%Y'
+                            )
+                ))[0].filemaker_record['Geschlecht']
+
+            patient = Patient(
+                map_id=False,
+                id=str(uuid4()),
+                names=names,
+                birthdate=datetime.strptime(examinations[0].filemaker_record['GBD'], '%m/%d/%Y'),
+                gender=gend,
+                examinations=examination_ids
+                )
+            db.save(patient)
+
+        if i % 10 == 9:
+            break
+
+        if i % 100 == 0:
+            logger.info('aggregated {i} patients, continuing')
+
 
 #@mq.task
 def transform_data(config):
     db = DB.from_config(config)
-
-    deleted_docs = []
-    for p in db.query('patients/patients'):
-        deleted_docs.append(p['value'])
-
-    for p in db.query('examinations/examinations'):
-        deleted_docs.append(p['value'])
-
-    todelete = []
-    for d in deleted_docs:
-        doc = {'_id':d['_id'], '_rev':d['_rev'], 'deleted':True}
-        todelete.append(doc)
-
-    db.save_bulk(todelete)
-
-    k = None
-    exams = []
-
-    docs_to_save = []
-
-    for doc in db.query('patients/patient_aggregation'):
-        if k is None:
-            k = doc['key']
-
-        d = doc['value']
-
-        if doc['key'] == k:
-            uid = str(uuid4())
-
-            exam = Examination(
-                    map_id=False,
-                    id=uid,
-                    examinationtype=d['Untersuchung'], 
-                    started_date=parse_date(d['Zeitstempel']),
-                    sequencer_runs=[],
-                    pipeline_runs=[],
-                    filemaker_record=d
-                    )
-            exams.append(exam)
-
-        else:
-            try:
-                birthdate = datetime.strptime(d['GBD'], '%m/%d/%Y'),
-
-                patient = Patient(
-                    map_id=False,
-                    id=str(uuid4()),
-                    names=[f'{d["Vorname"], d["Name"]}'],
-                    birthdate=birthdate,
-                    gender=d['Geschlecht'],
-                    examinations=[e.id for e in exams],
-                    )
-            except Exception as e:
-                logger.warning(e)
-
-                patient = Patient(
-                    map_id=False,
-                    id=str(uuid4()),
-                    names=[f'{d["Vorname"], d["Name"]}'],
-                    gender=d['Geschlecht'],
-                    examinations=[e.id for e in exams],
-                    )
-
-            docs_to_save.append(patient.to_dict())
-
-            for e in exams:
-                docs_to_save.append(e.to_dict())
-
-            k = doc['key']
-            exams = []
-
-    db.save_bulk(docs_to_save)
+    #create_examinations(config)
+    aggregate_patients(config)
+    return
 
 
 @mq.task

@@ -156,6 +156,7 @@ class Examination(BaseDocument):
     filemaker_record: Optional[dict]
     last_sync_time: Optional[datetime]
     result: Optional[str]
+    patient: Optional[str]
 
     
 class Person(BaseDocument):

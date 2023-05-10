@@ -48,10 +48,19 @@ def setup_views(app_db):
     filemaker_map_fn = '''
     function (doc) {
       if(doc.document_type){
-        if(doc.document_type == 'filemaker_record')
-          emit(doc._id, doc);
-          }
+        if(doc.document_type == 'filemaker_record'){
+          emit([doc._id,0], 0);
+        }
+        else if(doc.document_type == 'examination'){
+          emit([doc.filemaker_record._id,1], 1);
+        }
       }
+    }
+    '''
+    filemaker_reduce_fn = '''
+    function (keys, values, rereduce) {
+      return sum(values);
+    }
     '''
 
     examinations = '''
@@ -107,13 +116,14 @@ def setup_views(app_db):
 
     patient_aggregation_fn = '''
     function (doc) {
-      if(doc.document_type == 'filemaker_record'){
-        emit([doc.Name, doc.Vorname, doc.GBD], doc);
+      if(doc.document_type == 'examination'){
+        emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
+        }
+      if(doc.document_type == 'patient'){
+        emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
         }
     }
     '''
-
-
 
     response = app_db.save(
         {
@@ -148,7 +158,9 @@ def setup_views(app_db):
             "_id": '_design/filemaker', 
             'views':
             {
-            'all':{"map":filemaker_map_fn},
+            'all':{"map":filemaker_map_fn,
+                   "reduce":filemaker_reduce_fn
+                    },
             }
         })
 
