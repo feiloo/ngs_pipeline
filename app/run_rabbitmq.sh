@@ -1,5 +1,6 @@
 #!/bin/bash
-podman run --rm \
+podman rm -v some-rabbit
+podman run \
 	-p 5672:5672 \
 	-p 15672:15672 \
 	--hostname my-rabbit \
