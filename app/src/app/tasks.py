@@ -168,9 +168,6 @@ def aggregate_patients(config):
     for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'])):
         g = list(group)
 
-        if i == 0:
-            logger.info(f'groups: {g}')
-
         patient_entries = list(filter(
             lambda d: d['doc']['document_type'] == 'patient',
             g
@@ -184,10 +181,7 @@ def aggregate_patients(config):
             examination_docs
             ))
 
-        if i == 0:
-            logger.info(f'examinations: {examinations}')
-
-        examinations_ids = [e.id for e in examinations]
+        examination_ids = [e.id for e in examinations]
 
         if len(patient_entries) > 1:
             raise RuntimeError(f'too many patient objects for examination group: {g}')
@@ -206,6 +200,12 @@ def aggregate_patients(config):
             if len({e.filemaker_record['GBD'] for e in examinations}) != 1:
                 logger.error(f'examination group {examinations} has multiple birthdates')
 
+            try:
+                birthdate = datetime.strptime(examinations[0].filemaker_record['GBD'], '%m/%d/%Y')
+            except Exception as e:
+                logger.error(e)
+                continue
+
             if len({e.filemaker_record['Geschlecht'] for e in examinations}) != 1:
                 logger.warn(f'detected gender change in patient of examinations {examinations}')
 
@@ -222,14 +222,12 @@ def aggregate_patients(config):
                 map_id=False,
                 id=str(uuid4()),
                 names=names,
-                birthdate=datetime.strptime(examinations[0].filemaker_record['GBD'], '%m/%d/%Y'),
+                birthdate=birthdate, 
                 gender=gend,
                 examinations=examination_ids
                 )
-            db.save(patient)
+            db.save(patient.to_dict())
 
-        if i % 10 == 9:
-            break
 
         if i % 100 == 0:
             logger.info('aggregated {i} patients, continuing')
