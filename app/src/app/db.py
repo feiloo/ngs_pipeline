@@ -1,4 +1,82 @@
 import pycouchdb as couch
+import requests
+
+from textwrap import indent
+
+def ind(x):
+    return indent(x, "  ")
+
+def iffn(h, b):
+    fn = "if (" + h + ") {\n" + ind(b) + "\n}"
+    return fn
+
+def fnfn(b):
+    fn = "function (doc) {\n" + ind(b) + "\n}"
+    return fn
+
+def gen_map_fn_str(body, doctypes=None, deleted=False):
+    """ generate a map function
+
+    body is the script body inside the map function
+    doctype can be a list of allowed document types for the view
+    deleted=False filters deleted documents from mapfn
+
+    """
+
+    mapfn = body
+
+    if doctypes is not None:
+        hd = "||".join([f"doc.document_type === d" for d in doctypes])
+        h = f"doc.document_type && ({hd})"
+        mapfn = iffn(h, mapfn)
+
+    if deleted == False:
+        mapfn = iffn("!doc.deleted", mapfn)
+
+    mapfn = fnfn(mapfn)
+    return mapfn
+
+
+
+class DesignDoc:
+    def __init__(self, name, views):
+        self.name = name
+        self.views = views
+
+    def to_dict(self):
+        design_doc_views = {}
+        for view in self.views:
+            design_doc_views[view.name] = view.functions()
+
+        design_doc_dict = {"_id":"_design/"+self.name,
+            "views": design_doc_views
+            }
+        return design_doc_dict
+
+    def __str__(self):
+        return f"DesignDoc: {self.to_dict()}"
+
+
+
+class View:
+    def __init__(self, name, map_body, reducefn=None, doctypes=None, deleted=False):
+        map_fn_str = gen_map_fn_str(map_body, doctypes, deleted)
+
+        self.name = name
+        self.mapfn = map_fn_str
+        self.reducefn = reducefn
+
+    def functions(self):
+        if self.reducefn is not None:
+            return {"map":self.mapfn, "reduce":self.reducefn}
+        else:
+            return {"map":self.mapfn}
+
+    def __str__(self):
+        return f"View: {self.name}, {self.functions()}"
+
+
+
 
 def setup_views(app_db):
     if 'app_state' not in app_db:
@@ -18,7 +96,6 @@ def setup_views(app_db):
         }
 
         app_db.save(default_app_settings)
-
 
     sequencer_map_fn = '''
     function (doc) {
@@ -223,6 +300,7 @@ class DB(couch.client.Database):
         ''' save the pydantic object '''
         o = self.save(obj.to_dict())
         return obj.from_dict(o)
+
 
 def get_db_url(app):
     host = app.config['data']['couchdb_host']
