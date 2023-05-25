@@ -1,0 +1,17 @@
+@startuml
+(*) --> "CLC workbench"
+--> ===B1===
+
+===B1=== --> "Variantlist (excel sheet for annotation)"
+--> ===B2===
+
+===B1=== --> "Export Summary, including TMB (pdf)"
+--> "manually copy summary data into excel)"
+--> ===B2===
+
+===B2=== --> "manually annotate variants in excel"
+--> "manually copy findings into result-sheet (pdf)"
+--> "manually copy findings into pathology system"
+--> "write diagnosis in pathology system"
+--> (*)
+@enduml
