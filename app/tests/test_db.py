@@ -25,5 +25,17 @@ def test_ddoc():
     patients_ddoc = DesignDoc('patients', [patient_aggregation, patient])
 
     #assert patients_ddoc.to_dict() == 
-    print(patients_ddoc.to_dict())
+    #print(patients_ddoc.to_dict())
 
+def test_create_document(db):
+    init_doc = {"_id":"sequencer_runs", 
+            "run_names": [],
+            }
+
+    #app_db = db
+    db.save(init_doc)
+
+    #_start_pipeline(app_db)
+    res = db.get('sequencer_runs')
+    res.pop('_rev')
+    assert res == init_doc

@@ -72,11 +72,11 @@ class MockDB:
 
 
 @pytest.fixture()
-def db():
+def dbmock():
     return MockDB()
 
 
-def test_handle_sequencer_run(monkeypatch, config, sequencer_run, db):
+def test_handle_sequencer_run(monkeypatch, config, sequencer_run, dbmock):
     config=testconfig
 
     def start_panel_workflow_mock(*args, **kwargs):
