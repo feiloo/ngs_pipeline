@@ -174,8 +174,14 @@ def couchdb_server():
     subprocess.run(args)
     time.sleep(3)
 
-
 @pytest.fixture()
+def db(couchdb_server, config):
+    s = couchdb_server
+    db = DB.init_db(config)
+    yield db
+    res = s.delete('ngs_app')
+
+@pytest.fixture(scope='session')
 def rabbitmq_server(config):
     args = podman_args + [
         '--name=test_rabbitmq', 
@@ -193,14 +199,6 @@ def rabbitmq_server(config):
     args = [ 'podman', 'stop', 'test_rabbitmq' ]
     subprocess.run(args)
     time.sleep(3)
-
-
-@pytest.fixture()
-def db(couchdb_server, config):
-    s = couchdb_server
-    db = DB.init_db(config)
-    yield db
-    res = s.delete('ngs_app')
 
 
 @pytest.fixture(scope='session')

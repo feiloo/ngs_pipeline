@@ -23,6 +23,7 @@ dependencies = [
 "pytest-celery",
 "mypy",
 "pep8",
+"responses",
 ]
 
 [tool.pytest.ini_options]
