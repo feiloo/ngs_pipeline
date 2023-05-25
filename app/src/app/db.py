@@ -1,16 +1,18 @@
-import pycouchdb as couch
-import requests
-
 from textwrap import indent
+import requests
+import pycouchdb as couch
 
 def ind(x):
+    ''' hardcoded indent for conveniecnce '''
     return indent(x, "  ")
 
 def iffn(h, b):
+    ''' javascript if function '''
     fn = "if (" + h + ") {\n" + ind(b) + "\n}"
     return fn
 
 def fnfn(b):
+    ''' javascript function function'''
     fn = "function (doc) {\n" + ind(b) + "\n}"
     return fn
 
@@ -26,7 +28,7 @@ def gen_map_fn_str(body, doctypes=None, deleted=False):
     mapfn = body
 
     if doctypes is not None:
-        hd = "||".join([f"doc.document_type === d" for d in doctypes])
+        hd = "||".join([f"doc.document_type === '{d}'" for d in doctypes])
         h = f"doc.document_type && ({hd})"
         mapfn = iffn(h, mapfn)
 
@@ -53,17 +55,18 @@ class DesignDoc:
             }
         return design_doc_dict
 
+    def add_view(self, view):
+        self.views += view
+
     def __str__(self):
         return f"DesignDoc: {self.to_dict()}"
 
 
 
 class View:
-    def __init__(self, name, map_body, reducefn=None, doctypes=None, deleted=False):
-        map_fn_str = gen_map_fn_str(map_body, doctypes, deleted)
-
+    def __init__(self, name, mapfn, reducefn=None):
         self.name = name
-        self.mapfn = map_fn_str
+        self.mapfn = mapfn
         self.reducefn = reducefn
 
     def functions(self):
@@ -76,6 +79,10 @@ class View:
         return f"View: {self.name}, {self.functions()}"
 
 
+def basic_view(name, map_body, reducefn=None, doctypes=None, deleted=False):
+    ''' generate a view with some useful defaults '''
+    map_fn_str = gen_map_fn_str(map_body, doctypes, deleted)
+    return View(name, map_fn_str, reducefn)
 
 
 def setup_views(app_db):
@@ -97,6 +104,8 @@ def setup_views(app_db):
 
         app_db.save(default_app_settings)
 
+    ddocs = []
+
     sequencer_map_fn = '''
     function (doc) {
       if(doc.document_type){
@@ -105,6 +114,7 @@ def setup_views(app_db):
           }
       }
     '''
+
     sample_map_fn = '''
     function (doc) {
       if(doc.document_type){
@@ -183,24 +193,7 @@ def setup_views(app_db):
     }
     '''
 
-    patient_map_fn = '''
-    function (doc) {
-      if(doc.document_type == 'patient'){
-        emit(doc._id, doc);
-        }
-    }
-    '''
 
-    patient_aggregation_fn = '''
-    function (doc) {
-      if(doc.document_type == 'examination'){
-        emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
-        }
-      if(doc.document_type == 'patient'){
-        emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
-        }
-    }
-    '''
 
     response = app_db.save(
         {
@@ -252,15 +245,29 @@ def setup_views(app_db):
             }
         })
 
-    response = app_db.save(
-        {
-            "_id": '_design/patients', 
-            'views':
-            {
-            'patient_aggregation':{"map":patient_aggregation_fn},
-            'patients':{"map":patient_map_fn},
-            }
-        })
+
+    x = '''
+    if(doc.document_type == 'examination'){
+      emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
+      }
+    if(doc.document_type == 'patient'){
+      emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
+      }
+    '''
+    patient_aggregation = basic_view('patient_aggregation', x)
+    del x
+
+    x = '''
+    emit(doc._id, doc);
+    '''
+    patient = basic_view('patients', x, doctypes=['patient'])
+    del x
+
+    patients_ddoc = DesignDoc('patients', [patient_aggregation, patient]).to_dict()
+    ddocs.append(patients_ddoc)
+
+
+    response = app_db.save_bulk(ddocs)
 
 
 def _get_db_url(config):
@@ -338,16 +345,3 @@ def clean_init_filemaker_mirror():
 
     return db
 
-
-def init_db2(config):
-    user = config['couchdb_user']
-    psw = config['couchdb_psw']
-    host = config['couchdb_host']
-    port = 5984
-    url = f"http://{user}:{psw}@{host}:{port}"
-
-    server = couch.Server(url)
-    server.create('ngs_app')
-    app_db = server.database('ngs_app')
-    setup_views(app_db)
-    return app_db
