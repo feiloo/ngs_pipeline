@@ -172,7 +172,7 @@ class Patient(Person):
 class Pathologist(Person):
     short_name: str
 
-class Clinitian(Person):
+class Clinician(Person):
     short_name: str
 
 class Result(BaseModel):

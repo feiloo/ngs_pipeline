@@ -4,7 +4,7 @@ from app.parsers import parse_fastq_name
 from app.constants import testconfig
 from app.model import filemaker_examination_types, SequencerRun
 import app
-from app.tasks import handle_sequencer_run, retrieve_new_filemaker_data_incremental
+from app.tasks_impl import handle_sequencer_run, retrieve_new_filemaker_data_incremental
 
 def test_start_panel_workflow(config):
     config=testconfig
@@ -99,7 +99,7 @@ def test_handle_sequencer_run(monkeypatch, config, sequencer_run, db):
     panel_type=''
     sequencer_run_path='/data/private_testdata/miseq_output_testdata/220831_M03135_0376_000000000-KHR5V'
     #app.tasks.start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path)
-    res = app.tasks.handle_sequencer_run(config, seq_run=sequencer_run)
+    res = handle_sequencer_run(config, seq_run=sequencer_run)
 
     # because workflow inputs require [] workflows to be run
     # assert res == []

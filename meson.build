@@ -9,3 +9,4 @@ project('ngs_pipeline')
 
 subdir('compliance')
 subdir('folder_remap')
+subdir('app')
