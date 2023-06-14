@@ -2,8 +2,14 @@ from celery import Celery, chain, group
 from celery.utils.log import get_task_logger
 from celery.contrib.abortable import AbortableTask
 
-from app.tasks_impl import app_schedule, app_start_pipeline, start_panel_workflow_impl
+from app.tasks_impl import (app_schedule, app_start_pipeline, start_panel_workflow_impl, processor,
+    retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients)
 from app.config import Config
+
+from app.db import DB
+from app.filemaker_api import Filemaker
+import app.app
+
 
 # for sigint
 import signal
@@ -15,6 +21,7 @@ config = Config().dict()
 mq = Celery('ngs_pipeline', 
         **Config().celery_config()
         )
+
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
@@ -34,13 +41,19 @@ def setup_periodic_tasks(sender, **kwargs):
 
 
 def transform_data(config):
-    #create_examinations(config)
-    aggregate_patients(config)
+    db = DB.from_config(config)
+    filemaker = Filemaker.from_config(config)
+
+    create_examinations(db, config)
+    aggregate_patients(db, config)
 
 
 @mq.task
 def sync_couchdb_to_filemaker(config):
-    #retrieve_new_filemaker_data_incremental(config)
+    db = DB.from_config(config)
+    filemaker = Filemaker.from_config(config)
+
+    retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5)
     transform_data(config)
 
 
@@ -69,6 +82,7 @@ def start_pipeline(config):
 @mq.task
 def run_schedule(config):
     app_schedule(config)
+
 
 @mq.task(bind=True, base=AbortableTask)
 # self because its an abortable task

@@ -32,9 +32,11 @@ def test_pipeline_status(db, config):
         res = test_client.get('/pipeline_status')
         assert res.status_code == 200
 
+
 @pytest.mark.incremental
 class TestAppStart:
     def test_init_db(config, cli_runner, couchdb_server):
         result = cli_runner.invoke(main, ['--dev','init'])
         assert result.exit_code == 0
+        assert 'ngs_app' in couchdb_server
         couchdb_server.delete('ngs_app')

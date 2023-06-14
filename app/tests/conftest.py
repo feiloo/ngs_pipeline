@@ -9,9 +9,9 @@ from app.constants import testconfig
 from app.config import Config
 from app.app import main
 from app.ui import create_app
+
 from app.tasks import start_pipeline
 from app.db import DB
-
 
 
 
@@ -126,10 +126,15 @@ class FilemakerMock:
         pass
 
     def get_all_records(self, offset, limit=1000):
-        print(f'offset: {offset}')
         if offset > 50000:
             raise RuntimeError('offset in filemaker mock reached all documents')
-        return {'data': [fm_record]}
+
+        records = []
+        for r in range(offset, offset+limit):
+            f = fm_record
+            f['recordId'] = r
+            records.append(f)
+        return {'data': records}
 
 
 @pytest.fixture()
@@ -144,7 +149,7 @@ def couchdb_server():
     args = [ 'podman', 'stop', '-i', 'test_couchdb' ]
     subprocess.run(args)
 
-    args = [ 'podman', 'rm', '-v', 'test_couchdb' ]
+    args = [ 'podman', 'rm', '-iv', 'test_couchdb' ]
     subprocess.run(args)
 
     args = podman_args + [
@@ -180,6 +185,7 @@ def db(couchdb_server, config):
     db = DB.init_db(config)
     yield db
     res = s.delete('ngs_app')
+
 
 @pytest.fixture(scope='session')
 def rabbitmq_server(config):

@@ -6,7 +6,6 @@ from app.filemaker_api import Filemaker
 from app.db import DB
 
 from app.tasks_utils import Timeout, Schedule
-from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
 from itertools import count, groupby
 
 
@@ -14,7 +13,6 @@ from pathlib import Path
 from datetime import datetime
 import subprocess
 import tempfile
-import logging
 import time
 from itertools import count, groupby
 from more_itertools import chunked
@@ -31,11 +29,20 @@ from uuid import UUID, uuid4
 
 logger = get_task_logger(__name__)
 
-def retrieve_new_filemaker_data_full(config, backoff_time=5):
-    db = DB.from_config(config)
+def processor(record):
+    d = record['fieldData']
+    d['document_type'] = 'filemaker_record'
+    return d
 
+def retrieve_new_filemaker_data_full(db, filemaker, processor, backoff_time=5):
+    ''' iterate through all filemaker records in the table
+    do so in 1000 record batches until an error signals
+    that we've reached the end
+
+    sleep in between to not overload the server
+    save the raw data directly into the couchdb
+    '''
     timeout = Timeout(2*60*60) # 2h in seconds
-    filemaker = Filemaker.from_config(config)
 
     for batches_done in count():
         try:
@@ -43,11 +50,9 @@ def retrieve_new_filemaker_data_full(config, backoff_time=5):
             time.sleep(backoff_time)
             response = filemaker.get_all_records(offset=batches_done*1000+1, limit=1000)
             records = response['data']
-            for i,r in enumerate(records):
-                d = r['fieldData']
-                d['document_type']='filemaker_record'
-                db.save(d)
-                logger.debug(f"saved {i}")
+            res = list(map(processor, records))
+            db.save_bulk(res)
+            logger.debug(f"saved {batches_done} batches")
 
             if timeout.reached():
                 raise RuntimeError('database sync timed out took too long in total')
@@ -55,22 +60,28 @@ def retrieve_new_filemaker_data_full(config, backoff_time=5):
             logger.warning(f'cant export batch {batches_done} or database timed out with error: {e}')
             break
 
-    return db
+    return batches_done
 
 
-def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
-    db = DB.from_config(config)
+def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5):
+    '''
+    iterate through the highest filemaker records according to recordid and appstate
+    do so in 1000 record batches
 
+    if there are less records in filemaker than the couchdb, raise an error
+    iteratively save the new latest record id
+    '''
+    #db = DB.from_config(config)
+    #filemaker = Filemaker.from_config(config)
     timeout = Timeout(2*60*60) # 2h in seconds
 
     app_state = db.get('app_state')
     last_synced_row = int(app_state['last_synced_filemaker_row'])
-    filemaker = Filemaker.from_config(config)
-
-    def make_fm_doc(r):
-        d = r['fieldData']
-        d['document_type']='filemaker_record'
-        return d
+    # annoyingly, filemaker rows start with one, so we need to set last_synced row to 0 initially
+    # and after, it will match the highest rowid, but the number ow rows will be last_synced_row-1
+    if last_synced_row == -1:
+        logger.info("starting first incremental sync")
+        last_synced_row = 0
 
     for batches_done in count():
         try:
@@ -86,12 +97,12 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
 
             rowids = list(map(lambda x: int(x['recordId']), records))
             app_state['last_synced_filemaker_row'] = max(rowids)
-            newdocs = list(map(make_fm_doc, records)) + [app_state]
+            newdocs = list(map(processor, records)) + [app_state]
             db.save_bulk(newdocs)
             logger.debug(f"rowids: {rowids}")
 
             if timeout.reached():
-                raise RuntimeError('database sync timed out took too long in total')
+                raise RuntimeError('database sync timed out, it took too long in total')
 
         except Exception as e:
             logger.warning(f'cant export batch {batches_done} or database timed out with error: {e}')
@@ -100,8 +111,16 @@ def retrieve_new_filemaker_data_incremental(config, backoff_time=5):
     return batches_done
 
 
-def create_examinations(config):
-    db = DB.from_config(config)
+def create_examinations(db, config):
+    '''
+    scan through all filemaker records and create an exam document
+    for all filemaker records that didnt have one
+
+    save errors where duplicate examination exist
+    
+    examination records contain the original filemaker records
+    '''
+    #db = DB.from_config(config)
 
     logger.info('creating examinations')
 
@@ -134,8 +153,14 @@ def create_examinations(config):
             logger.info('created {i} examinations and continuing')
 
 
-def aggregate_patients(config):
-    db = DB.from_config(config)
+def aggregate_patients(db, config):
+    ''' scan through all examination documents and group
+    them by [name, birthdate] (see the patients/patient_aggregation view)
+    create a patient document for every group
+
+    link the patient and exam documents by their id's
+    '''
+    #db = DB.from_config(config)
     logger.info('aggregating patients')
     it = list(db.query('patients/patient_aggregation?include_docs=true'))
     logger.info('grouping examinations for patient aggregation')
@@ -208,8 +233,10 @@ def aggregate_patients(config):
             logger.info('aggregated {i} patients, continuing')
 
 
-def poll_sequencer_output(config):
-    db = DB.from_config(config)
+def poll_sequencer_output(db, config):
+    ''' ingest sequencer data from filepath
+    '''
+    #db = DB.from_config(config)
 
     # first, sync db with miseq output data
     sequencer_runs = list(db.query('sequencer_runs/all'))
@@ -253,6 +280,12 @@ def get_mp_number_from_path(p):
 
 
 def workflow_backend_execute(config, pipeline_run, is_aborted):
+    ''' a function that runs a pipeline run on a workflow backend
+    results and logs are saved onto the filesystem by the workflow backend
+    but also ingested into the database
+
+    this allows searching and viewing and editing the results
+    '''
     logger.debug(f'workflow backend starts executing {pipeline_run.id}')
     db = DB.from_config(config)
 

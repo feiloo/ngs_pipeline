@@ -3,7 +3,7 @@ import requests
 import pycouchdb as couch
 
 def ind(x):
-    ''' hardcoded indent for conveniecnce '''
+    ''' hardcoded indent for convenience '''
     return indent(x, "  ")
 
 def iffn(h, b):
@@ -284,7 +284,7 @@ class DB(couch.client.Database):
         server = couch.Server(_get_db_url(config))
         server.create('ngs_app')
         db = DB.from_config(config)
-        setup_views(db)
+        views = setup_views(db)
 
         return db
 

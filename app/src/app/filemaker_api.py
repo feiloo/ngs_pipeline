@@ -106,9 +106,16 @@ class Filemaker:
         r.raise_for_status()
         return r.json()['response']
 
+    def get_highest_recordid(self):
+        url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/_find'
+        #data = json.dumps({"query":[:w
+        #self._post(url, 
+
 
     def get_all_records(self, offset, limit=1000):
         ''' bulk gets record in creation order and paginated '''
+        if offset <=0:
+            raise RuntimeError("invalid record offset, offsets start with 1")
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/records?_limit={limit}&_offset={offset}'
         return self._get(url)
 
