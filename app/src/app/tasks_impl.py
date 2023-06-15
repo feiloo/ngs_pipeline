@@ -236,16 +236,15 @@ def aggregate_patients(db, config):
 def poll_sequencer_output(db, config):
     ''' ingest sequencer data from filepath
     '''
-    #db = DB.from_config(config)
 
     # first, sync db with miseq output data
-    sequencer_runs = list(db.query('sequencer_runs/all'))
-    sequencer_paths = [str(r['value']['original_path']) for r in sequencer_runs]
+    db_sequencer_runs = list(db.query('sequencer_runs/all'))
+    db_sequencer_paths = [str(r['value']['original_path']) for r in db_sequencer_runs]
 
-    miseq_output_path = Path(config['miseq_output_folder'])
-    miseq_output_runs = [miseq_output_path / x for x in miseq_output_path.iterdir()]
+    fs_miseq_output_path = Path(config['miseq_output_folder'])
+    fs_miseq_output_runs = [fs_miseq_output_path / x for x in fs_miseq_output_path.iterdir()]
 
-    for run_name in miseq_output_runs:
+    for run_name in fs_miseq_output_runs:
         try:
             parsed = parse_miseq_run_name(run_name.name)
             dirty=False
@@ -257,7 +256,7 @@ def poll_sequencer_output(db, config):
         # because it has been renamed or manually copied
         # we save the parsed information too, so we can efficiently query the runs
 
-        if str(run_name) in sequencer_paths:
+        if str(run_name) in db_sequencer_paths:
             continue
 
         sequencer_run = SequencerRun(

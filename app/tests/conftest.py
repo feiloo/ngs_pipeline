@@ -12,8 +12,32 @@ from app.ui import create_app
 
 from app.tasks import start_pipeline
 from app.db import DB
+import pathlib
 
 
+def pytest_addoption(parser):
+    parser.addoption("--testdir", type=pathlib.Path, help="specify the testdir to load testdata from")
+
+
+"""
+def pytest_generate_tests(metafunc):
+    if "testdir" in metafunc.fixturenames:
+        val = metafunc.config.getoption("testdir")
+        print(testdir)
+        if val:
+            testdir = val
+        else:
+            testdir = None
+        metafunc.parametrize("testdir", testdir)
+"""
+
+@pytest.fixture
+def testdir(request):
+    confval = request.config.getoption("--testdir")
+    if confval is None:
+        return  "/data/ngs_pipeline/app/tests"
+    else:
+        return confval
 
 # marker for incremental tests, see https://docs.pytest.org/en/7.1.x/example/simple.html 
 

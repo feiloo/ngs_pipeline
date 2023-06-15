@@ -1,8 +1,11 @@
 import pytest
+from pathlib import Path
+
+import shutil
 
 import app
 from app.filemaker_api import Filemaker
-from app.tasks_impl import processor, retrieve_new_filemaker_data_full, retrieve_new_filemaker_data_incremental, create_examinations
+from app.tasks_impl import processor, retrieve_new_filemaker_data_full, retrieve_new_filemaker_data_incremental, create_examinations, poll_sequencer_output
 
 from tests.conftest import fm_record
 
@@ -53,9 +56,21 @@ class TestDBSync:
     def aggregate_patients(config):
         pass
 
+
 # ingest 
-def poll_sequencer_output(self, config):
-    pass
+#@pytest.mark.parametrize("testpath")
+
+def test_poll_sequencer_output(db, config, testdir):
+    miseq_output_folder = Path(testdir) / 'fake_sequencer_output_dir'
+
+    c = config.dict()
+    c['miseq_output_folder'] = str(miseq_output_folder)
+    db_sequencer_runs = [x['original_path'] for x in db.view('sequencer_runs/all')]
+    assert db_sequencer_runs == []
+    poll_sequencer_output(db, c)
+    db_sequencer_runs = [x['original_path'] for x in db.view('sequencer_runs/all')]
+    fs_sequencer_runs = [ str(miseq_output_folder / '220101_M00000_0000_000000000-XXXXX')]
+    assert db_sequencer_runs == fs_sequencer_runs
 
 # run pipeline
 def workflow_backend_execute(config, pipeline_run, is_aborted):

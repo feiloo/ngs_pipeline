@@ -33,6 +33,10 @@ addopts = [
 markers = [
     "incremental"
     ]
+testpaths = [
+    "tests"
+    ]
+
 
 [project.scripts]
 ngs_pipeline = "app.app:main"

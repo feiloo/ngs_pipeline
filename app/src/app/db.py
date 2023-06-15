@@ -288,6 +288,12 @@ class DB(couch.client.Database):
 
         return db
 
+    def view(self, viewname, value=True):
+        if value==True:
+            res = self.query(viewname, as_list=True)
+            return [x['value'] for x in res]
+
+
     @staticmethod
     def from_config(config):
         url = _get_db_url(config)
