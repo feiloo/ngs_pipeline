@@ -5,8 +5,6 @@ from datetime import datetime
 from itertools import count, groupby
 from uuid import uuid4
 
-from more_itertools import chunked
-
 from celery.utils.log import get_task_logger
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
@@ -137,7 +135,7 @@ def create_examinations(db, config):
             logger.info('created {i} examinations and continuing')
 
 
-def create_patient_aggregate(examinations):
+def create_patient_aggregate(examinations: [Examination]) -> Patient :
     names = list(map(
         lambda e: f"{e.filemaker_record['Vorname']}, {e.filemaker_record['Name']}",
         examinations))
@@ -169,7 +167,7 @@ def create_patient_aggregate(examinations):
         names=names,
         birthdate=birthdate, 
         gender=gend,
-        examinations=examination_ids
+        examinations=[e.id for e in examinations]
         )
     return patient
 
@@ -201,16 +199,19 @@ def aggregate_patients(db, config):
             examination_docs
             ))
 
-        examination_ids = [e.id for e in examinations]
 
         if len(patient_entries) > 1:
             raise RuntimeError(f'too many patient objects for examination group: {g}')
         elif len(patient_entries) == 1:
             pd = patient_entries[0]
             pd.pop('_rev')
-            pd['examinations'] = examination_ids
-            p = Patient.from_dict(pd)
-            db.save(Patient.to_dict())
+
+            examination_ids = [e.id for e in examinations]
+
+            if pd['examinations'] != examination_ids:
+                pd['examinations'] = examination_ids
+                p = Patient.from_dict(pd)
+                db.save(Patient.to_dict())
         else:
             # no patient exists for the examinations
             try:

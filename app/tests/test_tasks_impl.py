@@ -5,7 +5,10 @@ import shutil
 
 import app
 from app.filemaker_api import Filemaker
-from app.tasks_impl import processor, retrieve_new_filemaker_data_full, retrieve_new_filemaker_data_incremental, create_examinations, poll_sequencer_output
+from app.tasks_impl import processor, retrieve_new_filemaker_data_full, retrieve_new_filemaker_data_incremental, create_examinations, poll_sequencer_output, create_patient_aggregate
+
+from app.model import Examination, Patient
+from app.parsers import parse_date
 
 from tests.conftest import fm_record
 
@@ -52,6 +55,20 @@ class TestDBSync:
         docs = list(filter(lambda d: 'document_type' in d and d['document_type'] == 'examination', alldocs))
         docs = [drop(d['filemaker_record'], ['_id','_rev']) for d in docs]
         assert fm_record['fieldData'] in docs
+
+    def test_create_patient_aggregate(self):
+        exam = Examination(
+                map_id=False,
+                id="examid",
+                examinationtype='',
+                started_date=parse_date('01/01/2001'),
+                sequencer_runs=[],
+                pipeline_runs=[],
+                filemaker_record={"Name":"N", "Vorname":"V", "GBD": "01/01/2001", "Geschlecht":"M", "Zeitstempel":"01/01/2001"}
+                )
+        examinations = [exam]
+        patient = create_patient_aggregate(examinations)
+        assert patient.examinations == ["examid"]
 
     def aggregate_patients(config):
         pass

@@ -24,6 +24,7 @@ dependencies = [
 "mypy",
 "pep8",
 "responses",
+"coverage"
 ]
 
 [tool.pytest.ini_options]
