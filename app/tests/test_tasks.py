@@ -94,12 +94,13 @@ def test_handle_sequencer_run(monkeypatch, config, sequencer_run, dbmock):
 
     monkeypatch.setattr(app.tasks, 'start_panel_workflow', start_panel_workflow_mock)
     monkeypatch.setattr(app.db.DB, 'from_config', get_db_mock)
+    db = dbmock
     
     workflow_inputs=[]
     panel_type=''
     sequencer_run_path='/data/private_testdata/miseq_output_testdata/220831_M03135_0376_000000000-KHR5V'
     #app.tasks.start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path)
-    res = handle_sequencer_run(config, seq_run=sequencer_run)
+    res = handle_sequencer_run(dbmock, config, seq_run=sequencer_run)
 
     # because workflow inputs require [] workflows to be run
     # assert res == []

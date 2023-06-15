@@ -1,31 +1,19 @@
-import time
+from time import sleep
+from itertools import count, groupby
+from pathlib import Path
+from datetime import datetime
+from itertools import count, groupby
+from uuid import uuid4
+
+from more_itertools import chunked
 
 from celery.utils.log import get_task_logger
 
-from app.filemaker_api import Filemaker
-from app.db import DB
-
-from app.tasks_utils import Timeout, Schedule
-from itertools import count, groupby
-
-
-from pathlib import Path
-from datetime import datetime
-import subprocess
-import tempfile
-import time
-from itertools import count, groupby
-from more_itertools import chunked
-
-from app.parsers import parse_fastq_name, parse_miseq_run_name
+from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
-
 from app.constants import filemaker_examination_types_workflow_mapping, workflow_paths
-from app.config import Config
-from app.filemaker_api import Filemaker
-from app.db import DB
-from app.parsers import parse_date
-from uuid import UUID, uuid4
+from app.tasks_utils import Timeout, Schedule
+from app.workflow_backends import workflow_backend_execute
 
 logger = get_task_logger(__name__)
 
@@ -47,7 +35,7 @@ def retrieve_new_filemaker_data_full(db, filemaker, processor, backoff_time=5):
     for batches_done in count():
         try:
             # backoff for a few seconds
-            time.sleep(backoff_time)
+            sleep(backoff_time)
             response = filemaker.get_all_records(offset=batches_done*1000+1, limit=1000)
             records = response['data']
             res = list(map(processor, records))
@@ -71,8 +59,6 @@ def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_ti
     if there are less records in filemaker than the couchdb, raise an error
     iteratively save the new latest record id
     '''
-    #db = DB.from_config(config)
-    #filemaker = Filemaker.from_config(config)
     timeout = Timeout(2*60*60) # 2h in seconds
 
     app_state = db.get('app_state')
@@ -86,7 +72,7 @@ def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_ti
     for batches_done in count():
         try:
             # backoff for a few seconds
-            time.sleep(backoff_time)
+            sleep(backoff_time)
             response = filemaker.get_all_records(offset=batches_done*1000+last_synced_row+1, limit=1000)
             records = list(response['data'])
             logger.debug(f"retrieved {len(records)} filemaker_rows")
@@ -120,8 +106,6 @@ def create_examinations(db, config):
     
     examination records contain the original filemaker records
     '''
-    #db = DB.from_config(config)
-
     logger.info('creating examinations')
 
     new_records = []
@@ -153,6 +137,43 @@ def create_examinations(db, config):
             logger.info('created {i} examinations and continuing')
 
 
+def create_patient_aggregate(examinations):
+    names = list(map(
+        lambda e: f"{e.filemaker_record['Vorname']}, {e.filemaker_record['Name']}",
+        examinations))
+
+    if len({e.filemaker_record['GBD'] for e in examinations}) != 1:
+        logger.error(f'examination group {examinations} has multiple birthdates')
+
+    try:
+        birthdate = datetime.strptime(examinations[0].filemaker_record['GBD'], '%m/%d/%Y')
+    except Exception as e:
+        logger.error(e)
+        raise e
+
+    if len({e.filemaker_record['Geschlecht'] for e in examinations}) != 1:
+        logger.warn(f'detected gender change in patient of examinations {examinations}')
+
+    gend = list(sorted(
+            examinations,
+            key=lambda e: 
+                datetime.strptime(
+                    e.filemaker_record['Zeitstempel'],
+                    '%m/%d/%Y'
+                    )
+        ))[0].filemaker_record['Geschlecht']
+
+    patient = Patient(
+        map_id=False,
+        id=str(uuid4()),
+        names=names,
+        birthdate=birthdate, 
+        gender=gend,
+        examinations=examination_ids
+        )
+    return patient
+
+
 def aggregate_patients(db, config):
     ''' scan through all examination documents and group
     them by [name, birthdate] (see the patients/patient_aggregation view)
@@ -160,7 +181,6 @@ def aggregate_patients(db, config):
 
     link the patient and exam documents by their id's
     '''
-    #db = DB.from_config(config)
     logger.info('aggregating patients')
     it = list(db.query('patients/patient_aggregation?include_docs=true'))
     logger.info('grouping examinations for patient aggregation')
@@ -193,40 +213,11 @@ def aggregate_patients(db, config):
             db.save(Patient.to_dict())
         else:
             # no patient exists for the examinations
-            names = list(map(
-                lambda e: f"{e.filemaker_record['Vorname']}, {e.filemaker_record['Name']}",
-                examinations))
-
-            if len({e.filemaker_record['GBD'] for e in examinations}) != 1:
-                logger.error(f'examination group {examinations} has multiple birthdates')
-
             try:
-                birthdate = datetime.strptime(examinations[0].filemaker_record['GBD'], '%m/%d/%Y')
+                patient = create_patient_aggregate(examinations)
+                db.save(patient.to_dict())
             except Exception as e:
-                logger.error(e)
                 continue
-
-            if len({e.filemaker_record['Geschlecht'] for e in examinations}) != 1:
-                logger.warn(f'detected gender change in patient of examinations {examinations}')
-
-            gend = list(sorted(
-                    examinations,
-                    key=lambda e: 
-                        datetime.strptime(
-                            e.filemaker_record['Zeitstempel'],
-                            '%m/%d/%Y'
-                            )
-                ))[0].filemaker_record['Geschlecht']
-
-            patient = Patient(
-                map_id=False,
-                id=str(uuid4()),
-                names=names,
-                birthdate=birthdate, 
-                gender=gend,
-                examinations=examination_ids
-                )
-            db.save(patient.to_dict())
 
 
         if i % 100 == 0:
@@ -278,88 +269,9 @@ def get_mp_number_from_path(p):
     return d['sample_name']
 
 
-def workflow_backend_execute(config, pipeline_run, is_aborted):
-    ''' a function that runs a pipeline run on a workflow backend
-    results and logs are saved onto the filesystem by the workflow backend
-    but also ingested into the database
-
-    this allows searching and viewing and editing the results
-    '''
-    logger.debug(f'workflow backend starts executing {pipeline_run.id}')
-    db = DB.from_config(config)
-
-    try:
-        output_dir = config['workflow_output_dir']
-
-        # we write to tempfile, even though there is an output log file in the wdl output directory, 
-        # because elsewhere we dont know the run name
-        # this will be fixed in future, for example by naming the runs
-
-        with tempfile.TemporaryFile() as stde:
-            with tempfile.TemporaryFile() as stdo:
-                clc_host = config['clc_host']
-                clc_user = config['clc_user']
-                clc_psw = config['clc_psw']
-
-                cmd = ['miniwdl', 'run', 
-                        '--env', f'CLC_HOST={clc_host}', 
-                        '--env', f"CLC_USER={clc_user}", 
-                        '--env', f'CLC_PSW={clc_psw}', 
-                        '--dir', output_dir, 
-                        pipeline_run.workflow
-                        ] + [f'files={i}' for i in pipeline_run.input_samples]
-
-                pipeline_proc = subprocess.Popen(
-                        cmd,
-                        stdout=stde, #subprocess.PIPE, 
-                        stderr=stdo, #subprocess.PIPE
-                        #capture_output=True
-                        )
-
-                # update db entry every second when the process runs
-                while pipeline_proc.poll() is None:
-                    if is_aborted():
-                        logger.warning(f'pipeline_run: {pipeline_run.id} is aborting')
-                        pipeline_proc.send_signal(signal.SIGINT)
-                        logger.warning(f'pipeline_run: {pipeline_run.id} was aborted')
-
-                    stde.seek(0)
-                    stdo.seek(0)
-                    pipeline_run.logs.stderr = stde.read().decode('utf-8')
-                    pipeline_run.logs.stdout = stdo.read().decode('utf-8')
-
-                    pipeline_run = db.save_obj(pipeline_run)
-                    time.sleep(1)
-
-                # update db entry at the end
-                stde.seek(0)
-                stdo.seek(0)
-                pipeline_run.logs.stderr = stde.read().decode('utf-8')
-                pipeline_run.logs.stdout = stdo.read().decode('utf-8')
-
-                retcode = pipeline_proc.returncode
-                if retcode == 0:
-                    pipeline_run.status = 'successful'
-                elif retcode == signal.SIGINT:
-                    pipeline_run.status = 'aborted'
-                else:
-                    pipeline_run.status = 'error'
-
-                pipeline_run = db.save_obj(pipeline_run)
-
-    except Exception as e:
-        logger.warning(e)
-        
-        # check types by converting into domain model object
-        pipeline_document = pipeline_run.to_dict()
-        pipeline_document['status'] = 'error'
-        pipeline_run = pipeline_run.from_dict(pipeline_document)
-        pipeline_run = db.save_obj(pipeline_run)
-
-
-def start_panel_workflow_impl(self, config, workflow_inputs, panel_type, sequencer_run_path):
+def start_panel_workflow_impl(is_aborted, db, config, workflow_inputs, panel_type, sequencer_run_path):
     logger.info(f'starting run: {sequencer_run_path}')
-    db = DB.from_config(config)
+    #db = DB.from_config(config)
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
@@ -395,13 +307,11 @@ def start_panel_workflow_impl(self, config, workflow_inputs, panel_type, sequenc
     #p = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
 
     # pass is_aborted function to backend for stopping
-    workflow_backend_execute(config, pipeline_run, self.is_aborted)
+    workflow_backend_execute(db, config, pipeline_run, is_aborted)
 
 
 
-def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
-    db = DB.from_config(config)
-
+def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):#, new_run:dict):
     new_run = {'value':seq_run.to_dict()}
 
     year_str = new_run['value']['parsed']['date']
@@ -492,25 +402,9 @@ def handle_sequencer_run(config:dict, seq_run:SequencerRun):#, new_run:dict):
     return promise
 
 
-def app_schedule(config):
-    db = DB.from_config(config)
-    schedule = Schedule(db)
-    schedule.acquire_lock()
 
-    try:
-        if schedule.is_enabled() and schedule.has_work_now():
-            s1 = sync_couchdb_to_filemaker.s(config)
-            s2 = start_pipeline.s(config)
-            res = chain(s1, s2)
-            res.apply_async()
-    finally:
-        schedule.release_lock()
-
-
-
-def app_start_pipeline(config):
-    db = DB.from_config(config)
-    poll_sequencer_output(config)
+def app_start_pipeline(db, config):
+    poll_sequencer_output(db, config)
 
     sequencer_runs = list(db.query('sequencer_runs/all'))
     pipeline_runs = list(db.query('pipeline_runs/all'))
@@ -538,7 +432,22 @@ def app_start_pipeline(config):
             continue
 
         logger.info(f"starting pipeline for sequencer run {new_run['value']['original_path']}")
-        start_workflow_task = handle_sequencer_run(config, SequencerRun(True, **new_run['value']))
+        start_workflow_task = handle_sequencer_run(db, config, SequencerRun(True, **new_run['value']))
         start_workflow_tasks.append(start_panel_workflow_task)
 
     return start_workflow_tasks
+
+
+def app_schedule(db, config):
+    schedule = Schedule(db)
+    schedule.acquire_lock()
+
+    try:
+        if schedule.is_enabled() and schedule.has_work_now():
+            s1 = sync_couchdb_to_filemaker.s(config)
+            s2 = start_pipeline.s(config)
+            res = chain(s1, s2)
+            res.apply_async()
+    finally:
+        schedule.release_lock()
+

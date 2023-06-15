@@ -23,6 +23,12 @@ mq = Celery('ngs_pipeline',
         )
 
 
+@mq.task
+def run_schedule(config):
+    db = DB.from_config(config)
+    app_schedule(config)
+
+
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     #sig = start_pipeline.signature(args=(config,))
@@ -57,7 +63,6 @@ def sync_couchdb_to_filemaker(config):
     transform_data(config)
 
 
-
 @mq.task
 def start_pipeline(config):
     '''
@@ -66,7 +71,8 @@ def start_pipeline(config):
 
     if not, it runs the pipeline for the missing ones
     '''
-    start_workflow_tasks = app_start_pipeline(config)
+    db = DB.from_config(config)
+    start_workflow_tasks = app_start_pipeline(db, config)
 
     tasks = []
     for start_workflow_task in start_panel_workflow_tasks:
@@ -78,14 +84,10 @@ def start_pipeline(config):
     return promise
 
 
-
-@mq.task
-def run_schedule(config):
-    app_schedule(config)
-
-
 @mq.task(bind=True, base=AbortableTask)
 # self because its an abortable task
 # aborting doesnt work yet
 def start_panel_workflow(self, config, workflow_inputs, panel_type, sequencer_run_path):
-    start_panel_workflow_impl(self, config, workflow_inputs, panel_type, sequencer_run_path)
+    db = DB.from_config(config)
+
+    start_panel_workflow_impl(self.is_aborted, db, config, workflow_inputs, panel_type, sequencer_run_path)
