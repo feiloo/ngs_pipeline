@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from celery.utils.log import get_task_logger
 
+from more_itertools import flatten
+
 from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
 from app.constants import filemaker_examination_types_workflow_mapping, workflow_paths
@@ -21,7 +23,8 @@ def processor(record):
     return d
 
 def retrieve_new_filemaker_data_full(db, filemaker, processor, backoff_time=5):
-    ''' iterate through all filemaker records in the table
+    ''' 
+    iterate through all filemaker records in the table
     do so in 1000 record batches until an error signals
     that we've reached the end
 
@@ -76,13 +79,19 @@ def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_ti
             logger.debug(f"retrieved {len(records)} filemaker_rows")
             logger.debug(f"last_synced_row_was {last_synced_row} and record id was {records[0]['recordId']}")
 
+
             if last_synced_row >= int(records[0]['recordId']):
+                logger.error(f"record id doesnt match last_synced_row with record {records}")
                 raise RuntimeError('record id doesnt match last_synced_row')
 
             rowids = list(map(lambda x: int(x['recordId']), records))
             app_state['last_synced_filemaker_row'] = max(rowids)
             newdocs = list(map(processor, records)) + [app_state]
             db.save_bulk(newdocs)
+
+            app_state = db.get('app_state')
+            last_synced_row = int(app_state['last_synced_filemaker_row'])
+
             logger.debug(f"rowids: {rowids}")
 
             if timeout.reached():
@@ -132,13 +141,19 @@ def create_examinations(db, config):
         db.save(exam.to_dict())
 
         if i % 1000==0:
-            logger.info('created {i} examinations and continuing')
+            logger.info(f'created {i} examinations and continuing')
 
+
+def get_names(examination):
+    filemaker_record = examination.filemaker_record
+    names = {}
+    names['fullname'] = f"{filemaker_record['Vorname']}, {filemaker_record['Name']}"
+    names['firstname'] = filemaker_record['Vorname']
+    names['lastname'] = filemaker_record['Name']
+    return names
 
 def create_patient_aggregate(examinations: [Examination]) -> Patient :
-    names = list(map(
-        lambda e: f"{e.filemaker_record['Vorname']}, {e.filemaker_record['Name']}",
-        examinations))
+    names = list(map(get_names, examinations))
 
     if len({e.filemaker_record['GBD'] for e in examinations}) != 1:
         logger.error(f'examination group {examinations} has multiple birthdates')
@@ -164,7 +179,7 @@ def create_patient_aggregate(examinations: [Examination]) -> Patient :
     patient = Patient(
         map_id=False,
         id=str(uuid4()),
-        names=names,
+        names=names[0],
         birthdate=birthdate, 
         gender=gend,
         examinations=[e.id for e in examinations]
@@ -183,13 +198,15 @@ def aggregate_patients(db, config):
     it = list(db.query('patients/patient_aggregation?include_docs=true'))
     logger.info('grouping examinations for patient aggregation')
 
-    for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'])):
+    for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'][0:-1])):
         g = list(group)
 
+        '''
         patient_entries = list(filter(
             lambda d: d['doc']['document_type'] == 'patient',
             g
             ))
+        '''
         examination_docs = list(filter(
             lambda d: d['doc']['document_type'] == 'examination',
             g
@@ -199,18 +216,26 @@ def aggregate_patients(db, config):
             examination_docs
             ))
 
+        examination_ids = [e.id for e in examinations]
+        patient_entries = list(flatten(
+            [list(db.query(f"patients/patient_examinations", key=i)) 
+                for i in examination_ids]
+            ))
+
+        patient_entries = [Patient(map_id=True, **e['value']) for e in patient_entries]
+
+
 
         if len(patient_entries) > 1:
             raise RuntimeError(f'too many patient objects for examination group: {g}')
         elif len(patient_entries) == 1:
+            # found a patient, update patient examinations if there is a mismatch
             pd = patient_entries[0]
-            pd.pop('_rev')
 
-            examination_ids = [e.id for e in examinations]
-
-            if pd['examinations'] != examination_ids:
+            if pd.examinations != examination_ids:
+                new_patient = pd.to_dict()
                 pd['examinations'] = examination_ids
-                p = Patient.from_dict(pd)
+                p = Patient(True, pd)
                 db.save(Patient.to_dict())
         else:
             # no patient exists for the examinations
@@ -222,7 +247,7 @@ def aggregate_patients(db, config):
 
 
         if i % 100 == 0:
-            logger.info('aggregated {i} patients, continuing')
+            logger.info(f'aggregated {i} patients, continuing')
 
 
 def poll_sequencer_output(db, config):
@@ -272,7 +297,6 @@ def get_mp_number_from_path(p):
 
 def start_panel_workflow_impl(is_aborted, db, config, workflow_inputs, panel_type, sequencer_run_path):
     logger.info(f'starting run: {sequencer_run_path}')
-    #db = DB.from_config(config)
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
@@ -308,8 +332,8 @@ def start_panel_workflow_impl(is_aborted, db, config, workflow_inputs, panel_typ
     #p = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
 
     # pass is_aborted function to backend for stopping
-    workflow_backend_execute(db, config, pipeline_run, is_aborted)
-
+    backend = 'noop'
+    workflow_backend_execute(db, config, pipeline_run, is_aborted, backend)
 
 
 def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):#, new_run:dict):
@@ -336,7 +360,7 @@ def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):#, new_run:dict)
 
             #get the the examination the sample belongs to
             p = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
-            logger.info(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number}')
+            logger.info(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number} and examination: {p}')
 
             if len(p) != 1:
                 panel_type = 'invalid'
@@ -345,8 +369,7 @@ def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):#, new_run:dict)
 
         
             if panel_type == 'invalid':
-                raise RuntimeError('panel type invalid')
-                continue
+                raise RuntimeError(f'panel type invalid, because {len(p)} examinations were found')
 
             samples.append({
                 'path':sample_path, 
@@ -381,27 +404,18 @@ def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):#, new_run:dict)
             continue
 
         # create async celery tasks
+        sequencer_run_path = new_run['value']['original_path']
 
         task_args = (
                 config, 
                 workflow_inputs, 
                 panel_type, 
-                new_run['value']['original_path'],
+                sequencer_run_path
                 )
         
         start_panel_workflow_tasks.append(task_args)
 
     return start_panel_workflow_tasks
-
-    tasks = []
-    for task_args in start_panel_workflow_tasks:
-        signature = start_panel_workflow.s(*task_args)
-
-    lazy_group = group(tasks)
-    promise = lazy_group.apply_async()
-
-    return promise
-
 
 
 def app_start_pipeline(db, config):
@@ -433,8 +447,9 @@ def app_start_pipeline(db, config):
             continue
 
         logger.info(f"starting pipeline for sequencer run {new_run['value']['original_path']}")
-        start_workflow_task = handle_sequencer_run(db, config, SequencerRun(True, **new_run['value']))
-        start_workflow_tasks.append(start_panel_workflow_task)
+        x = handle_sequencer_run(db, config, SequencerRun(True, **new_run['value']))
+        logger.debug(f"handle sequencer run returned {x}")
+        start_workflow_tasks.append(x)
 
     return start_workflow_tasks
 

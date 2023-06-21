@@ -5,7 +5,9 @@ from celery.utils.log import get_task_logger
 
 logger = get_task_logger(__name__)
 
-def workflow_backend_execute(db, config, pipeline_run, is_aborted):
+
+
+def workflow_backend_execute_miniwdl(db, config, pipeline_run, is_aborted):
     ''' a function that runs a pipeline run on a workflow backend
     results and logs are saved onto the filesystem by the workflow backend
     but also ingested into the database
@@ -81,3 +83,24 @@ def workflow_backend_execute(db, config, pipeline_run, is_aborted):
         pipeline_document['status'] = 'error'
         pipeline_run = pipeline_run.from_dict(pipeline_document)
         pipeline_run = db.save_obj(pipeline_run)
+
+def workflow_backend_execute_noop(db, config, pipeline_run, is_aborted):
+    pass
+
+def workflow_backend_execute_clc(db, config, pipeline_run, is_aborted):
+    pass
+
+def workflow_backend_execute_nextflow(db, config, pipeline_run, is_aborted):
+    pass
+
+def workflow_backend_execute(db, config, pipeline_run, is_aborted, backend):
+    if backend == 'noop':
+        workflow_backend_execute_noop(db, config, pipeline_run, is_aborted)
+    elif backend == 'clc':
+        raise NotImplemented()
+    elif backend == 'nextflow':
+        raise NotImplemented()
+    elif backend == 'miniwdl':
+        raise NotImplemented()
+    else:
+        raise RuntimeError(f"invalid workflow backend: {backend}")

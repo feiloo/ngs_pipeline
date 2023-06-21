@@ -33,7 +33,7 @@ def drop(d, k, ignore=False):
 @pytest.mark.incremental
 class TestDBSync:
     # sync other db
-    def test_retrieve_new_filemaker_data_full(self, monkeypatch, fm_mock, config, db):
+    def test_retrieve_new_filemaker_data_full(self, fm_mock, config, db):
         filemaker = fm_mock
         retrieve_new_filemaker_data_full(db, filemaker, processor, backoff_time=5)
         alldocs = [drop(x['doc'], ['_id','_rev'], ignore=True) for x in list(db.all())]
@@ -64,7 +64,13 @@ class TestDBSync:
                 started_date=parse_date('01/01/2001'),
                 sequencer_runs=[],
                 pipeline_runs=[],
-                filemaker_record={"Name":"N", "Vorname":"V", "GBD": "01/01/2001", "Geschlecht":"M", "Zeitstempel":"01/01/2001"}
+                filemaker_record={
+                    "Name":"N", 
+                    "Vorname":"V", 
+                    "GBD": "01/01/2001", 
+                    "Geschlecht":"M", 
+                    "Zeitstempel":"01/01/2001"
+                    }
                 )
         examinations = [exam]
         patient = create_patient_aggregate(examinations)
@@ -75,8 +81,6 @@ class TestDBSync:
 
 
 # ingest 
-#@pytest.mark.parametrize("testpath")
-
 def test_poll_sequencer_output(db, config, testdir):
     miseq_output_folder = Path(testdir) / 'fake_sequencer_output_dir'
 
@@ -89,9 +93,6 @@ def test_poll_sequencer_output(db, config, testdir):
     fs_sequencer_runs = [ str(miseq_output_folder / '220101_M00000_0000_000000000-XXXXX')]
     assert db_sequencer_runs == fs_sequencer_runs
 
-# run pipeline
-def workflow_backend_execute(config, pipeline_run, is_aborted):
-    pass
 def start_panel_workflow_impl(self, config, workflow_inputs, panel_type, sequencer_run_path):
     pass
 def handle_sequencer_run(config:dict, seq_run):#, new_run:dict):

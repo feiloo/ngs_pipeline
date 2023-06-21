@@ -158,9 +158,10 @@ class Examination(BaseDocument):
     result: Optional[str]
     patient: Optional[str]
 
+
     
 class Person(BaseDocument):
-    names: List[str]
+    names: dict[str,str]
 
 class Patient(Person):
     document_type: str = 'patient'

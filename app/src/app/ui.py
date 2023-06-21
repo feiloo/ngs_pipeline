@@ -130,7 +130,6 @@ def select_case_to_run():
     selected_cases['cases'] = list(set(selected_cases['cases'] + [case_molnr]))
     db.save(selected_cases)
 
-    print(case_molnr)
     return redirect('/tracking_form')
 
 @admin.route("/save_tracking_form", methods=['POST'])
@@ -140,11 +139,9 @@ def save_tracking_form():
     if form_id is None:
         pass
 
-    print(request.form)
     '''
     try:
         form = get_db(current_app).get(form_id)
-        print(request.form)
         #get_db(current_app).save(run)
     except pycouchdb.exceptions.NotFound:
         pass
@@ -176,7 +173,7 @@ def save_panel_type():
     sequencer_run_id = request.args.get('run_id')
     run = db.get(sequencer_run_id)
     if run['panel_type'] != 'invalid':
-        print('error panel_type is already set')
+        logger.warning('error panel_type is already set')
     else:
         run['panel_type'] = request.form['panel_type']
         db(current_app).save(run)

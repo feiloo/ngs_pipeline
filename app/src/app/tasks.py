@@ -46,21 +46,14 @@ def setup_periodic_tasks(sender, **kwargs):
     '''
 
 
-def transform_data(config):
-    db = DB.from_config(config)
-    filemaker = Filemaker.from_config(config)
-
-    create_examinations(db, config)
-    aggregate_patients(db, config)
-
-
 @mq.task
 def sync_couchdb_to_filemaker(config):
     db = DB.from_config(config)
     filemaker = Filemaker.from_config(config)
 
     retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5)
-    transform_data(config)
+    create_examinations(db, config)
+    aggregate_patients(db, config)
 
 
 @mq.task
@@ -73,10 +66,12 @@ def start_pipeline(config):
     '''
     db = DB.from_config(config)
     start_workflow_tasks = app_start_pipeline(db, config)
+    return
 
     tasks = []
-    for start_workflow_task in start_panel_workflow_tasks:
+    for task_args in start_workflow_tasks:
         signature = start_panel_workflow.s(*task_args)
+        tasks.append(signature)
 
     lazy_group = group(tasks)
     promise = lazy_group.apply_async()

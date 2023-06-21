@@ -23,7 +23,6 @@ def pytest_addoption(parser):
 def pytest_generate_tests(metafunc):
     if "testdir" in metafunc.fixturenames:
         val = metafunc.config.getoption("testdir")
-        print(testdir)
         if val:
             testdir = val
         else:
