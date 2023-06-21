@@ -2,17 +2,13 @@ from celery import Celery, chain, group
 from celery.utils.log import get_task_logger
 from celery.contrib.abortable import AbortableTask
 
-from app.tasks_impl import (app_schedule, app_start_pipeline, start_panel_workflow_impl, processor,
+from app.tasks_impl import (run_app_schedule_impl, app_start_pipeline, start_panel_workflow_impl, processor,
     retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients)
 from app.config import Config
 
 from app.db import DB
 from app.filemaker_api import Filemaker
 import app.app
-
-
-# for sigint
-import signal
 
 logger = get_task_logger(__name__)
 
@@ -26,7 +22,7 @@ mq = Celery('ngs_pipeline',
 @mq.task
 def run_schedule(config):
     db = DB.from_config(config)
-    app_schedule(config)
+    run_app_schedule_impl(db, config)
 
 
 @mq.on_after_configure.connect

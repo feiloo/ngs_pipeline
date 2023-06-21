@@ -95,8 +95,10 @@ def test_poll_sequencer_output(db, config, testdir):
 
 def start_panel_workflow_impl(self, config, workflow_inputs, panel_type, sequencer_run_path):
     pass
+
 def handle_sequencer_run(config:dict, seq_run):#, new_run:dict):
     pass
+
 def app_start_pipeline(config):
     pass
 

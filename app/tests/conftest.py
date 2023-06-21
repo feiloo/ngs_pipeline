@@ -159,10 +159,38 @@ class FilemakerMock:
             records.append(f)
         return {'data': records}
 
-
 @pytest.fixture()
 def fm_mock():
     return FilemakerMock()
+
+
+class MockDB:
+    def __init__(self):
+        self.data = {}
+        self.k = 0
+
+    def save(self, doc, *args, **kwargs):
+        self.k+=1
+        self.data[self.k] = doc
+
+    def save_bulk(self, docs, *args, **kwargs):
+        for d in docs:
+            self.k+=1
+            self.data[self.k] = d
+
+    def get(self, id, *args, **kwargs):
+        if id == 'app_state':
+            return {'_id':'app_state','last_synced_filemaker_row':0}
+        pass
+
+    def query(self, url, *args, **kwargs):
+        if 'examinations/mp_number?key=' in url:
+            return [{'value':exam}]
+
+
+@pytest.fixture()
+def dbmock():
+    return MockDB()
 
 
 podman_args = [ 'podman', 'run', '-d']#, '--rm' ]

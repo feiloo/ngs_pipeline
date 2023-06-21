@@ -336,7 +336,7 @@ def start_panel_workflow_impl(is_aborted, db, config, workflow_inputs, panel_typ
     workflow_backend_execute(db, config, pipeline_run, is_aborted, backend)
 
 
-def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):#, new_run:dict):
+def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):
     new_run = {'value':seq_run.to_dict()}
 
     year_str = new_run['value']['parsed']['date']
@@ -418,8 +418,8 @@ def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):#, new_run:dict)
     return start_panel_workflow_tasks
 
 
-def app_start_pipeline(db, config):
-    poll_sequencer_output(db, config)
+def collect_new_runs(db, config):
+    logger.info(f'started collecting new runs')
 
     sequencer_runs = list(db.query('sequencer_runs/all'))
     pipeline_runs = list(db.query('pipeline_runs/all'))
@@ -427,8 +427,8 @@ def app_start_pipeline(db, config):
     sequencer_run_ids = set([str(Path(r['value']['original_path']).name) for r in sequencer_runs])
     pipeline_run_refs = set([str(Path(r['value']['sequencer_run_path']).name) for r in pipeline_runs])
     new_run_ids = sequencer_run_ids - pipeline_run_refs
-    logger.info(f'starting pipeline with {len(new_run_ids)} new runs')
 
+    # get the new_run docs that match the new_run_ids
     new_runs = list(filter(
         lambda x: str(Path(x['value']['original_path']).name) in new_run_ids, 
         sequencer_runs)
@@ -438,8 +438,12 @@ def app_start_pipeline(db, config):
         logger.info('no new runs')
         return
     else:
-        logger.info(f'found {len(new_runs)} new runs')
+        logger.info(f'collected {len(new_runs)} new runs')
 
+    return new_runs
+
+
+def collect_new_run_tasks(db, config, new_runs):
     start_workflow_tasks = []
 
     for new_run in new_runs:
@@ -454,7 +458,15 @@ def app_start_pipeline(db, config):
     return start_workflow_tasks
 
 
-def app_schedule(db, config):
+def app_start_pipeline(db, config):
+    poll_sequencer_output(db, config)
+    new_runs = collect_new_runs(db,config)
+    return execute_new_runs(db, config, new_runs)
+
+
+
+
+def run_app_schedule_impl(db, config):
     schedule = Schedule(db)
     schedule.acquire_lock()
 

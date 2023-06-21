@@ -67,6 +67,13 @@ def _get_pipeline_dashboard_html():
             panel_types=panel_types
             )
 
+@admin.route("/db/raw/<document_id>", methods=['get'])
+def raw_document_view(document_id):
+    db = get_db(current_app)
+    doc = db.get(document_id)
+    ds = str(doc)
+    return render_template('raw_db_document.html', doc=doc,ds=ds)
+
 @admin.route("/tracking_form", methods=['get'])
 def tracking_form():
     asample = {
@@ -201,6 +208,10 @@ def pipeline_autorun_disable():
     settings = db.get('app_settings')
     settings['autorun_pipeline'] = False
     db.save(settings)
+    return redirect('/pipeline_status')
+
+@admin.route("/", methods=['GET'])
+def root():
     return redirect('/pipeline_status')
 
 

@@ -6,11 +6,6 @@ from app.model import filemaker_examination_types, SequencerRun
 import app
 from app.tasks_impl import handle_sequencer_run, retrieve_new_filemaker_data_incremental
 
-def test_start_panel_workflow(config):
-    config=testconfig
-    panel_type=None
-    #start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path)
-
 
 @pytest.fixture()
 def sequencer_run():
@@ -44,36 +39,19 @@ exam = {
       "pipeline_runs": [],
       "filemaker_record": {}
     }
-	
 
-class MockDB:
-    def __init__(self):
-        self.data = {}
-        self.k = 0
+def test_retrieve_new_filemaker_data_incremental(monkeypatch, config, db, fm_mock):
+    def get_db_mock(*args,**kwargs):
+        return MockDB()
 
-    def save(self, doc, *args, **kwargs):
-        self.k+=1
-        self.data[self.k] = doc
+    def get_filemaker_mock(*args, **kwargs):
+        return fm_mock
 
-    def save_bulk(self, docs, *args, **kwargs):
-        for d in docs:
-            self.k+=1
-            self.data[self.k] = d
+    monkeypatch.setattr(app.db.DB, 'from_config', get_db_mock)
+    monkeypatch.setattr(app.filemaker_api.Filemaker, 'from_config', get_filemaker_mock)
 
-    def get(self, id, *args, **kwargs):
-        if id == 'app_state':
-            return {'_id':'app_state','last_synced_filemaker_row':0}
-        pass
-
-    def query(self, url, *args, **kwargs):
-        if 'examinations/mp_number?key=' in url:
-            return [{'value':exam}]
-        pass
-
-
-@pytest.fixture()
-def dbmock():
-    return MockDB()
+    #retrieve_new_filemaker_data_incremental(config, backoff_time=0.01)
+    #assert False
 
 
 def test_handle_sequencer_run(monkeypatch, config, sequencer_run, dbmock):
@@ -106,15 +84,8 @@ def test_handle_sequencer_run(monkeypatch, config, sequencer_run, dbmock):
     # assert res == []
 
 
-def test_retrieve_new_filemaker_data_incremental(monkeypatch, config, db, fm_mock):
-    def get_db_mock(*args,**kwargs):
-        return MockDB()
+def test_start_panel_workflow(config):
+    config=testconfig
+    panel_type=None
+    #start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path)
 
-    def get_filemaker_mock(*args, **kwargs):
-        return fm_mock
-
-    monkeypatch.setattr(app.db.DB, 'from_config', get_db_mock)
-    monkeypatch.setattr(app.filemaker_api.Filemaker, 'from_config', get_filemaker_mock)
-
-    #retrieve_new_filemaker_data_incremental(config, backoff_time=0.01)
-    #assert False

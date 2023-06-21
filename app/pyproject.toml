@@ -32,7 +32,10 @@ addopts = [
     "--import-mode=importlib",
     ]
 markers = [
-    "incremental"
+    "incremental",
+    "unit",
+    "slow",
+    "integration"
     ]
 testpaths = [
     "tests"

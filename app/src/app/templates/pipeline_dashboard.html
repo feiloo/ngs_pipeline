@@ -73,12 +73,14 @@ td {
 		<th>Mol_NR</th>
 		<th>examinationtype</th>
 		<th>result</th>
+		<th>raw_document</th>
 	    </tr>
 	    {% for exam in examinations %}
 	    <tr>
 		<td><nobr><data>{{ exam['filemaker_record']['Mol_NR'] }}<data></td>
 		<td><nobr><data>{{ exam['examinationtype'] }}<data></td>
 		<td><nobr><data>{{ exam['result'] }}<data></td>
+		<td><nobr><a href="/db/raw/{{ exam['_id'] }}">{{exam['_id']}}</a></td>
 	    </tr>
 	    {% endfor %}
 	    </table>
@@ -87,10 +89,12 @@ td {
 	    <table> 
 	    <tr>
 		<th>original path</th>
+                <th>raw_document</th>
 	    </tr>
 	    {% for run in sequencer_runs %}
 	    <tr>
 		<td><nobr><data>{{ run['original_path'] }}<data></td>
+	        <td><nobr><a href="/db/raw/{{ run['_id'] }}">{{run['_id']}}</a></td>
 	    </tr>
 	    {% endfor %}
 	    </table>
@@ -99,11 +103,12 @@ td {
 
     <table> 
     <tr>
-    <th>created time</th>
-    <th>age</th>
-    <th>status</th>
-    <th>inputs</th>
-    <th>stdout</th>
+	    <th>created time</th>
+	    <th>age</th>
+	    <th>status</th>
+	    <th>inputs</th>
+	    <th>stdout</th>
+            <th>raw_document</th>
     </tr>
     {% for run in pipeline_runs %}
     <tr>
@@ -134,6 +139,7 @@ td {
 			    </div>
 		    </details>
 	    </td>
+	    <td><nobr><a href="/db/raw/{{ run['_id'] }}">{{run['_id']}}</a></td>
     </tr>
     {% endfor %}
     </table>
