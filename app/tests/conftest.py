@@ -1,6 +1,7 @@
 import time
 from typing import Dict, Tuple
 import subprocess
+import json
 
 import pytest
 import pycouchdb as couch
@@ -159,10 +160,31 @@ class FilemakerMock:
             records.append(f)
         return {'data': records}
 
+
+class FilemakerMock2:
+    ''' filemaker mock but return more realistic private testdata '''
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def get_all_records(self, offset, limit=1000):
+        with open('/data/private_testdata/filemaker_dump.json', 'r') as f:
+            data = json.loads(f.read())
+
+        if offset-1+limit >= len(data['data']):
+            raise RuntimeError('offset in filemaker mock2 reached all documents')
+
+        req_lines = data['data'][offset-1:offset-1+limit]
+
+        return {'data': req_lines}
+
+
 @pytest.fixture()
 def fm_mock():
     return FilemakerMock()
 
+@pytest.fixture()
+def fm_mock2():
+    return FilemakerMock2()
 
 class MockDB:
     def __init__(self):

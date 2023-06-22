@@ -85,7 +85,7 @@ class Filemaker:
     def __exit__(self):
         self.logout()
 
-    def _get(self, url):
+    def _get(self, url) -> dict:
         r = requests.get(
                 url, 
                 verify=self.ssl_verify,
@@ -95,7 +95,7 @@ class Filemaker:
         r.raise_for_status()
         return r.json()['response']
 
-    def _post(self, url, data):
+    def _post(self, url, data) -> dict:
         r = requests.get(
                 url, 
                 data=data,
@@ -107,19 +107,24 @@ class Filemaker:
         return r.json()['response']
 
     def get_highest_recordid(self):
+        raise NotImplemented()
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/_find'
-        #data = json.dumps({"query":[:w
-        #self._post(url, 
 
 
-    def get_all_records(self, offset, limit=1000):
-        ''' bulk gets record in creation order and paginated '''
+    def get_all_records(self, offset, limit=1000) -> dict:
+        ''' bulk gets record in creation order and paginated 
+        note that filemaker records are sorted by their recordid, but 
+        not all recordids are consecutive, so record 406 might follow record 400
+        '''
         if offset <=0:
             raise RuntimeError("invalid record offset, offsets start with 1")
+        if limit <= 0:
+            raise RuntimeError("invalid record limit, limits must be at least >= 1")
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/records?_limit={limit}&_offset={offset}'
         return self._get(url)
 
     def find_records(self, layout=None):
+        raise NotImplemented()
         if layout is None:
             layout='Leistungserfassung'
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/_find'
@@ -129,6 +134,7 @@ class Filemaker:
         return self._post(url, data)
 
     def find_mp_record(self, token, mp_number,limit=10):
+        raise NotImplemented()
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/_find'
         data = json.dumps({"query":[{"Mol_NR":f"=={mp_number}"}],
                     "limit":limit
@@ -136,6 +142,7 @@ class Filemaker:
         return self._post(url, data)
 
     def get_new_records_by_date(self, day, month, year, examination_types=filemaker_examination_types, limit=1000):
+        raise NotImplemented()
         url = f'{self.fm_baseurl}/{self.table_name}/layouts/{self.layout}/_find'
 
         data = json.dumps({"query":[
