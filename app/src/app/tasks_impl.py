@@ -18,6 +18,8 @@ from app.constants import filemaker_examination_types_workflow_mapping, workflow
 from app.tasks_utils import Timeout, Schedule
 from app.workflow_backends import workflow_backend_execute
 
+import pycouchdb
+
 logger = get_task_logger(__name__)
 
 def build_obj(obj: dict) -> BaseDocument:
@@ -270,12 +272,17 @@ def get_mp_number_from_path(p):
     return d['sample_name']
 
 
-def get_examination_of_sample(sample):
+def get_examination_of_sample(db, sample_path, missing_ok=False):
     mp_number_with_year = get_mp_number_from_path(str(sample_path))
     mp_number, mp_year = mp_number_with_year.split('-')
 
-    examinations = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
-    if len(examinations) == 0:
+    try:
+        examinations = list(db.query(f'examinations/mp_number?key=[{mp_year},{mp_number}]'))
+    except pycouchdb.exceptions.NotFound:
+        logger.info(f'no examination of sample {sample_path} found')
+        examinations = [None]
+
+    if missing_ok == False and len(examinations) == 0:
         raise RuntimeError(f"no examination found for sample: {sample}")
     elif len(examinations) >= 2:
         raise RuntimeError(f"multiple examinations found for sample: {sample} examinations: {examinations}")
@@ -288,7 +295,7 @@ def check_years_match(sequencer_run, samples):
     run_year_str = sequencer_run.parsed['date']
     run_year = {datetime.strptime(run_year_str, '%y%m%d').year}
 
-    sample_years = {}
+    sample_years = set()
 
     for sample_path in samples:
         mp_number_with_year = get_mp_number_from_path(str(sample_path))
@@ -328,6 +335,7 @@ def poll_sequencer_output(db, config):
 
     sequencer_runs = []
 
+
     for run_name in fs_miseq_output_runs:
         try:
             parsed = parse_miseq_run_name(run_name.name)
@@ -336,12 +344,13 @@ def poll_sequencer_output(db, config):
             parsed = {}
             dirty=True
 
-        outputs = Path(run_name).rglob('*.fastq.gz')
+        outputs = list(Path(run_name).rglob('*.fastq.gz'))
 
         # run folder name doesnt adhere to illumina naming convention
         # because it has been renamed or manually copied
         # we save the parsed information too, so we can efficiently query the runs
 
+        # skipp creating sequencer run if it already exists
         if str(run_name) in db_sequencer_paths:
             continue
 
@@ -357,7 +366,10 @@ def poll_sequencer_output(db, config):
                 )
 
         check_years_match(sequencer_run, outputs)
-        examinations = [get_examination_of_sample(s) for s in outputs]
+        examinations = list(filter(lambda x: x is not None, 
+            [get_examination_of_sample(db, s, missing_ok=True) for s in outputs]
+            ))
+
         new_exams = link_examinations_to_sequencer_run(examinations, sequencer_run.id)
 
         # this validates the fields
@@ -418,6 +430,7 @@ def start_workflow_impl(
 def link_sequencer_run_to_examinations(db, config:dict, seq_run:SequencerRun):
     outputs = seq_run.outputs
     seq_run_year = datetime.strptime(year_str, '%y%m%d').year
+    logger.debug(f'seq_run_year {seq_run_year}')
 
     for sample_path in outputs:
         mp_number_with_year = get_mp_number_from_path(str(sample_path))
@@ -429,20 +442,16 @@ def link_sequencer_run_to_examinations(db, config:dict, seq_run:SequencerRun):
         if seq_run_year != samplename_year:
             raise RuntimeError('year in the examination record mismatches with the year of the samplename')
 
-
-
-
-
     new_run = {'value':seq_run.to_dict()}
 
     year_str = new_run['value']['parsed']['date']
     year = datetime.strptime(year_str, '%y%m%d').year
     samples = []
 
-    sample_paths = (
+    sample_paths = list((
             Path(config['miseq_output_folder']) 
             / Path(new_run['value']['original_path']).name
-            ).rglob('*.fastq.gz')
+            ).rglob('*.fastq.gz'))
 
     return sample_paths
 
