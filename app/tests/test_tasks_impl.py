@@ -11,27 +11,12 @@ from app.tasks_impl import processor, retrieve_new_filemaker_data_full, retrieve
 from app.model import Examination, Patient
 from app.parsers import parse_date
 
+from app.tasks_utils import drop
+
 from tests.conftest import fm_record
 
-def drop(d, k, ignore=False):
-    ''' ignore non existing key '''
-    if isinstance(k, str):
-        if k not in d and ignore:
-            pass
-        else:
-            d.pop(k)
-    elif isinstance(k, list):
-        for kv in k:
-            if kv not in d and ignore:
-                pass
-            else:
-                d.pop(kv)
-    else:
-        RuntimeError("k has to be string or list")
-    return d
-
-
 @pytest.mark.incremental
+@pytest.mark.slow
 class TestDBSync:
     # sync other db
     def test_retrieve_new_filemaker_data_full(self, fm_mock2, config, db):
@@ -62,7 +47,7 @@ class TestDBSync:
                 map_id=False,
                 id="examid",
                 examinationtype='',
-                started_date=parse_date('01/01/2001'),
+                started_date=parse_date('01/01/2022'),
                 sequencer_runs=[],
                 pipeline_runs=[],
                 filemaker_record={

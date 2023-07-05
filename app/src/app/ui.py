@@ -8,7 +8,7 @@ from app.constants import *
 from app.model import panel_types, SequencerInputSample, TrackingForm, Examination, Patient
 
 from app.samplesheet import read_samplesheet
-from app.tasks import start_pipeline, sync_couchdb_to_filemaker
+from app.tasks import start_pipeline, sync_couchdb_to_filemaker, sync_sequencer_output
 from app.db import DB
 
 import pycouchdb as couch
@@ -167,6 +167,7 @@ def pipeline_start():
 def pipeline_sync():
     current_app.logger.info('pipeline sync')
     sync_couchdb_to_filemaker.apply_async(args=(dict(current_app.config['data']),))
+    sync_sequencer_output.apply_async(args=(dict(current_app.config['data']),))
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_stop", methods=['POST'])
