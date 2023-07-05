@@ -10,4 +10,5 @@ test('pytest', p, args : [
 	apppath,
 	'--testdir',
 	testdir
-	])
+	], 
+	timeout: 600)

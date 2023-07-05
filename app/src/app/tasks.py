@@ -2,8 +2,8 @@ from celery import Celery, chain, group
 from celery.utils.log import get_task_logger
 from celery.contrib.abortable import AbortableTask
 
-from app.tasks_impl import (run_app_schedule_impl, app_start_pipeline, start_panel_workflow_impl, processor,
-    retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients)
+from app.tasks_impl import (run_app_schedule_impl, start_workflow_impl, processor,
+    retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients, poll_sequencer_output)
 from app.config import Config
 
 from app.db import DB
@@ -53,13 +53,32 @@ def sync_couchdb_to_filemaker(config):
 
 
 @mq.task
+def sync_sequencer_output(config):
+    db = DB.from_config(config)
+    poll_sequencer_output(db, config)
+
+
+@mq.task(bind=True, base=AbortableTask)
+# self because its an abortable task
+# aborting doesnt work yet
+def start_workflow(self, config, workflow_inputs, panel_type):
+    db = DB.from_config(config)
+
+    start_workflow_impl(self.is_aborted, db, config, workflow_inputs, panel_type)
+
+
+@mq.task
 def start_pipeline(config):
     '''
     this loads the sequencer output files into the database
     compares if every sequencer run has an according pipeline run by the folder path
 
     if not, it runs the pipeline for the missing ones
-    '''
+    sync_couchdb_to_filemaker
+    new_examinations = collect_work()
+
+
+
     db = DB.from_config(config)
     start_workflow_tasks = app_start_pipeline(db, config)
     return
@@ -73,12 +92,6 @@ def start_pipeline(config):
     promise = lazy_group.apply_async()
 
     return promise
+    '''
 
 
-@mq.task(bind=True, base=AbortableTask)
-# self because its an abortable task
-# aborting doesnt work yet
-def start_panel_workflow(self, config, workflow_inputs, panel_type, sequencer_run_path):
-    db = DB.from_config(config)
-
-    start_panel_workflow_impl(self.is_aborted, db, config, workflow_inputs, panel_type, sequencer_run_path)

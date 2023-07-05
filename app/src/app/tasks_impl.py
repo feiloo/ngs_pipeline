@@ -1,23 +1,36 @@
+from typing import Optional, Literal, List
+
 from time import sleep
 from itertools import count, groupby
 from pathlib import Path
 from datetime import datetime
 from itertools import count, groupby
 from uuid import uuid4
+from collections.abc import Callable
 
 from celery.utils.log import get_task_logger
 
 from more_itertools import flatten
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
-from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types
+from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types, document_types, BaseDocument
 from app.constants import filemaker_examination_types_workflow_mapping, workflow_paths
 from app.tasks_utils import Timeout, Schedule
 from app.workflow_backends import workflow_backend_execute
 
 logger = get_task_logger(__name__)
 
-def processor(record):
+def build_obj(obj: dict) -> BaseDocument:
+    ty = obj['document_type']
+    data_obj = document_types[ty](map_id=True, **obj)
+    return data_obj
+
+def query(db, query) -> List[BaseDocument]:
+    l= list(db.query(query))
+    return [build_obj(x['value']) for x in l]
+
+
+def processor(record: dict) -> dict:
     d = record['fieldData']
     d['document_type'] = 'filemaker_record'
     return d
@@ -136,7 +149,8 @@ def create_examinations(db, config):
                 started_date=parse_date(d['Zeitstempel']),
                 sequencer_runs=[],
                 pipeline_runs=[],
-                filemaker_record=d
+                filemaker_record=d,
+                annotations={}
                 )
         db.save(exam.to_dict())
 
@@ -151,6 +165,7 @@ def get_names(examination):
     names['firstname'] = filemaker_record['Vorname']
     names['lastname'] = filemaker_record['Name']
     return names
+
 
 def create_patient_aggregate(examinations: [Examination]) -> Patient :
     names = list(map(get_names, examinations))
@@ -250,6 +265,56 @@ def aggregate_patients(db, config):
             logger.info(f'aggregated {i} patients, continuing')
 
 
+def get_mp_number_from_path(p):
+    d = parse_fastq_name(Path(p).name)
+    return d['sample_name']
+
+
+def get_examination_of_sample(sample):
+    mp_number_with_year = get_mp_number_from_path(str(sample_path))
+    mp_number, mp_year = mp_number_with_year.split('-')
+
+    examinations = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+    if len(examinations) == 0:
+        raise RuntimeError(f"no examination found for sample: {sample}")
+    elif len(examinations) >= 2:
+        raise RuntimeError(f"multiple examinations found for sample: {sample} examinations: {examinations}")
+
+    examination = examinations[0]
+    return examination
+
+
+def check_years_match(sequencer_run, samples):
+    run_year_str = sequencer_run.parsed['date']
+    run_year = {datetime.strptime(run_year_str, '%y%m%d').year}
+
+    sample_years = {}
+
+    for sample_path in samples:
+        mp_number_with_year = get_mp_number_from_path(str(sample_path))
+        mp_number, mp_year = mp_number_with_year.split('-')
+        samplename_year = datetime.strptime(mp_year, '%y').year
+        sample_years.add(samplename_year)
+
+    if run_year != sample_years:
+        raise RuntimeError(f'sequencer run name has a different year than its output samples with sample year: {sample_years} and run year {run_year}')
+
+
+def link_examinations_to_sequencer_run(examinations: dict, seq_run_id: str):
+    new_exams = []
+
+    for exam in examinations:
+        ex = Examination(map_id=True, **exam).sequencer_runs
+        if seq_run_id not in ex.sequencer_runs:
+            ex.sequencer_runs = ex.sequencer_runs + [seq_run_id]
+            new_exams.append(ex)
+        else:
+            continue
+
+    return new_exams
+
+
+
 def poll_sequencer_output(db, config):
     ''' ingest sequencer data from filepath
     '''
@@ -261,6 +326,8 @@ def poll_sequencer_output(db, config):
     fs_miseq_output_path = Path(config['miseq_output_folder'])
     fs_miseq_output_runs = [fs_miseq_output_path / x for x in fs_miseq_output_path.iterdir()]
 
+    sequencer_runs = []
+
     for run_name in fs_miseq_output_runs:
         try:
             parsed = parse_miseq_run_name(run_name.name)
@@ -268,6 +335,8 @@ def poll_sequencer_output(db, config):
         except RuntimeError as e:
             parsed = {}
             dirty=True
+
+        outputs = Path(run_name).rglob('*.fastq.gz')
 
         # run folder name doesnt adhere to illumina naming convention
         # because it has been renamed or manually copied
@@ -283,23 +352,35 @@ def poll_sequencer_output(db, config):
                 name_dirty=str(dirty),
                 parsed=parsed,
                 state='successful',
-                indexed_time=datetime.now()
+                indexed_time=datetime.now(),
+                outputs=outputs
                 )
 
+        check_years_match(sequencer_run, outputs)
+        examinations = [get_examination_of_sample(s) for s in outputs]
+        new_exams = link_examinations_to_sequencer_run(examinations, sequencer_run.id)
+
         # this validates the fields
-        db.save(sequencer_run.to_dict())
+        db.save_bulk([sequencer_run.to_dict()] + new_exams)
+        sequencer_runs.append(sequencer_run)
+
+    return sequencer_runs
 
 
-def get_mp_number_from_path(p):
-    d = parse_fastq_name(Path(p).name)
-    return d['sample_name']
 
 
-def start_panel_workflow_impl(is_aborted, db, config, workflow_inputs, panel_type, sequencer_run_path):
-    logger.info(f'starting run: {sequencer_run_path}')
+def start_workflow_impl(
+        is_aborted: Callable, 
+        db, config, workflow_inputs, panel_type: str):
+
+    logger.info(f'starting new pipeline run with inputs: {workflow_inputs} and panel: {panel_type}')
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
+        return
+
+    if panel_type not in filemaker_examination_types_workflow_mapping:
+        logger.error(f"panel type: {panel_type} not known in filemaker examination_types")
         return
 
     workflow_type = filemaker_examination_types_workflow_mapping[panel_type]
@@ -316,8 +397,6 @@ def start_panel_workflow_impl(is_aborted, db, config, workflow_inputs, panel_typ
             id=str(uuid4()),
             created_time=datetime.now(),
             input_samples=[str(x) for x in workflow_inputs],
-            sequencer_run_path=Path(sequencer_run_path),
-            sequencer_run_id='',
             workflow=workflow,
             status='running',
             logs={
@@ -336,7 +415,24 @@ def start_panel_workflow_impl(is_aborted, db, config, workflow_inputs, panel_typ
     workflow_backend_execute(db, config, pipeline_run, is_aborted, backend)
 
 
-def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):
+def link_sequencer_run_to_examinations(db, config:dict, seq_run:SequencerRun):
+    outputs = seq_run.outputs
+    seq_run_year = datetime.strptime(year_str, '%y%m%d').year
+
+    for sample_path in outputs:
+        mp_number_with_year = get_mp_number_from_path(str(sample_path))
+        mp_number, mp_year = mp_number_with_year.split('-')
+        samplename_year = datetime.strptime(mp_year, '%y').year
+
+
+        # check that database year field matches filename year
+        if seq_run_year != samplename_year:
+            raise RuntimeError('year in the examination record mismatches with the year of the samplename')
+
+
+
+
+
     new_run = {'value':seq_run.to_dict()}
 
     year_str = new_run['value']['parsed']['date']
@@ -347,6 +443,8 @@ def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):
             Path(config['miseq_output_folder']) 
             / Path(new_run['value']['original_path']).name
             ).rglob('*.fastq.gz')
+
+    return sample_paths
 
     for sample_path in sample_paths:
         try:
@@ -359,7 +457,7 @@ def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):
                 raise RuntimeError('year in the examination record mismatches with the year of the samplename')
 
             #get the the examination the sample belongs to
-            p = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
+            examination = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
             logger.info(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number} and examination: {p}')
 
             if len(p) != 1:
@@ -379,10 +477,14 @@ def handle_sequencer_run(db, config:dict, seq_run:SequencerRun):
                 'sequencer_run': new_run,
                 })
 
+            examination['sequencer_runs'] = examinations['sequencer_runs'] + [ seq_run.id ]
+
         except Exception as e:
             logger.warning(f'error: {e}')
             continue
 
+
+def group_samples_by_panel(samples):
     start_panel_workflow_tasks = []
 
     # run a batch workflow for each panel type
@@ -443,27 +545,15 @@ def collect_new_runs(db, config):
     return new_runs
 
 
-def collect_new_run_tasks(db, config, new_runs):
-    start_workflow_tasks = []
+def collect_work(db, config):
+    new_sequencer_runs = poll_sequencer_output(db, config)
+    for s in new_sequencer_runs:
+        link_sequencer_run_to_examinations(db, config, s)
 
-    for new_run in new_runs:
-        if new_run['value']['state'] != 'successful':
-            continue
+    #new_runs = collect_new_runs(db,config)
+    new_examinations = list(db.query('examinations/unfinished'))
 
-        logger.info(f"starting pipeline for sequencer run {new_run['value']['original_path']}")
-        x = handle_sequencer_run(db, config, SequencerRun(True, **new_run['value']))
-        logger.debug(f"handle sequencer run returned {x}")
-        start_workflow_tasks.append(x)
-
-    return start_workflow_tasks
-
-
-def app_start_pipeline(db, config):
-    poll_sequencer_output(db, config)
-    new_runs = collect_new_runs(db,config)
-    return execute_new_runs(db, config, new_runs)
-
-
+    return new_examinations
 
 
 def run_app_schedule_impl(db, config):

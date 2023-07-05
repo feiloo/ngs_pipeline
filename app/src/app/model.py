@@ -1,7 +1,7 @@
 from typing import Optional, Literal, List
 from datetime import datetime
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 import json
 
@@ -61,6 +61,8 @@ class BaseDocument(BaseModel):
     rev: Optional[str]
     data_model_version: str = DATA_MODEL_VERSION
     document_type: str
+    dirty: bool = True
+    ignore_dirty: bool = False
 
     def __init__(self, map_id: bool, *args, **kwargs):
         d = kwargs
@@ -87,6 +89,10 @@ class BaseDocument(BaseModel):
         m = type(self)(True,**d)
         return m
 
+    class Config:
+        validate_assignment = True
+        frozen = True
+
 
 class PipelineLogs(BaseModel):
     stdout: str
@@ -98,9 +104,7 @@ class PipelineRun(BaseDocument):
     created_time: datetime
     input_samples: List[Path]
     workflow: str
-    sequencer_run_path: Path
-    sequencer_run_id: str
-    status: str
+    status: Literal['running', 'error', 'successful']
     logs: PipelineLogs
 
 
@@ -111,6 +115,7 @@ class SequencerRun(BaseDocument):
     parsed: dict
     indexed_time: datetime
     state: str = 'unfinished'
+    outputs: List[Path]
 
 
 class SampleBlock(BaseDocument):
@@ -145,6 +150,7 @@ class MolYearNumber(BaseModel):
     molnumber: int
     molyear: int
 
+
 class Examination(BaseDocument):
     ''' medical examination/case '''
     document_type: str = 'examination'
@@ -157,7 +163,6 @@ class Examination(BaseDocument):
     last_sync_time: Optional[datetime]
     result: Optional[str]
     patient: Optional[str]
-
 
     
 class Person(BaseDocument):
@@ -179,6 +184,12 @@ class Clinician(Person):
 class Result(BaseModel):
     description: str
 
+document_types = {
+        'sequencer_run': SequencerRun, 
+        'pipeline_run': PipelineRun, 
+        'examination': Examination, 
+        'patient': Patient
+        }
 
 #we need to create different taxonomical concepts for "workflow"
 # patho_workflow is the generalization of a ngs_panel 
