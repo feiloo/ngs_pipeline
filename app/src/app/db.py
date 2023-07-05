@@ -104,7 +104,6 @@ def setup_views(app_db):
 
         app_db.save(default_app_settings)
 
-    ddocs = []
 
     sequencer_map_fn = '''
     function (doc) {
@@ -150,48 +149,6 @@ def setup_views(app_db):
     }
     '''
 
-    examinations = '''
-    function (doc) {
-      if(doc.document_type){
-        if(doc.document_type == 'examination'){
-          emit(doc.started_date, doc);
-        }
-      }
-    }
-    '''
-
-    examinations_new_cases = '''
-    function (doc) {
-      if(document_type == 'examination') {
-        if(doc.sequencer_runs.length != 0 && doc.pipeline_runs == 0){
-          emit(doc, null);
-        }
-      }
-    }
-    '''
-
-    examinations_mp_number = '''
-    function (doc) {
-      if (doc.document_type && (doc.document_type === 'examination')){
-              const u = [
-                'DNA Lungenpanel Qiagen - kein nNGM Fall',
-                'DNA Panel ONCOHS',
-                'DNA PANEL ONCOHS (Mamma)',
-                'DNA PANEL ONCOHS (Melanom)',
-                'DNA PANEL ONCOHS (Colon)',
-                'DNA PANEL ONCOHS (GIST)',
-                'DNA PANEL Multimodel PanCancer DNA',
-                'DNA PANEL Multimodel PanCancer RNA',
-                'NNGM Lunge Qiagen',
-                'RNA Fusion Lunge',
-                'RNA Sarkompanel'
-                ];
-              if (u.includes(doc.filemaker_record.Untersuchung)){
-                emit([doc.filemaker_record.Jahr, doc.filemaker_record.Mol_NR], doc);
-              }
-      }
-    }
-    '''
 
 
 
@@ -234,40 +191,82 @@ def setup_views(app_db):
             }
         })
 
-    response = app_db.save(
-        {
-            "_id": '_design/examinations', 
-            'views':
-            {
-            'new_examinations':{"map":examinations_new_cases},
-            'examinations':{"map":examinations},
-            'mp_number':{"map":examinations_mp_number},
-            }
-        })
+
+ddocs = []
+
+x = '''
+if(doc.document_type == 'examination'){
+  emit(doc.started_date, doc);
+'''
+examinations = basic_view('examinations', x, doctypes=['examination'])
+del x
+
+x = '''
+if(doc.document_type == 'examination'){
+  for(var i; i<doc.sequencer_runs.length; i++) {
+      emit(doc.sequencer_runs[i]._id, doc._id);
+  }
+'''
+examinations_sequencer_runs = basic_view('sequencer_runs', x, doctypes=['examination'])
+del x
+
+x = '''
+if(doc.pipeline_runs.length === 0 && doc.sequencer_runs.length > 0){
+  emit(doc, null);
+'''
+unfinished_examinations = basic_view('unfinished', x, doctypes=['examination'])
+del x
+
+x = '''
+const u = [
+    'DNA Lungenpanel Qiagen - kein nNGM Fall',
+    'DNA Panel ONCOHS',
+    'DNA PANEL ONCOHS (Mamma)',
+    'DNA PANEL ONCOHS (Melanom)',
+    'DNA PANEL ONCOHS (Colon)',
+    'DNA PANEL ONCOHS (GIST)',
+    'DNA PANEL Multimodel PanCancer DNA',
+    'DNA PANEL Multimodel PanCancer RNA',
+    'NNGM Lunge Qiagen',
+    'RNA Fusion Lunge',
+    'RNA Sarkompanel'
+];
+if (u.includes(doc.filemaker_record.Untersuchung)){
+    emit([doc.filemaker_record.Jahr, doc.filemaker_record.Mol_NR], doc);
+}
+'''
+examinations_mp_number = basic_view('mp_number', x, doctypes=['examination'])
+del x
+
+examinations_ddoc = DesignDoc('examinations', [
+    unfinished_examinations, 
+    examinations,
+    examinations_mp_number
+    ]).to_dict()
+ddocs.append(examinations_ddoc)
 
 
-    x = '''
-    if(doc.document_type == 'examination'){
-      emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
-      }
-    if(doc.document_type == 'patient'){
-      emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
-      }
-    '''
-    patient_aggregation = basic_view('patient_aggregation', x)
-    del x
+x = '''
+if(doc.document_type == 'examination'){
+  emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
+  }
+if(doc.document_type == 'patient'){
+  emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
+  }
+'''
+patient_aggregation = basic_view('patient_aggregation', x)
+del x
 
-    x = '''
-    emit(doc._id, doc);
-    '''
-    patient = basic_view('patients', x, doctypes=['patient'])
-    del x
+x = '''
+emit(doc._id, doc);
+'''
+patient = basic_view('patients', x, doctypes=['patient'])
+del x
 
-    patients_ddoc = DesignDoc('patients', [patient_aggregation, patient]).to_dict()
-    ddocs.append(patients_ddoc)
+patients_ddoc = DesignDoc('patients', [patient_aggregation, patient]).to_dict()
+ddocs.append(patients_ddoc)
 
-
-    response = app_db.save_bulk(ddocs)
+    #response = app_db.save_bulk(ddocs)
 
 
 def _get_db_url(config):
@@ -284,7 +283,11 @@ class DB(couch.client.Database):
         server = couch.Server(_get_db_url(config))
         server.create('ngs_app')
         db = DB.from_config(config)
-        views = setup_views(db)
+
+        setup_views(db)
+
+        db.views = ddocs
+        db.save_bulk(ddocs)
 
         return db
 
