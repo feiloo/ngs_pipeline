@@ -2,13 +2,30 @@ from pathlib import Path
 import logging
 import click
 
-from app.constants import *
+from celery.apps.beat import Beat
+from gunicorn.app.base import BaseApplication
+
 from app.tasks import mq
 from app.db import DB
 from app.config import Config
 from app.ui import create_app
 
-from gunicorn.app.base import BaseApplication
+
+class StandaloneApplication(BaseApplication):
+    def __init__(self, app, options=None):
+        self.options = options or {}
+        self.application = app
+        super().__init__()
+
+    def load_config(self):
+        config = {key: value for key, value in self.options.items()
+                if key in self.cfg.settings and value is not None}
+        for key, value in config.items():
+            self.cfg.set(key.lower(), value)
+
+    def load(self):
+        return self.application
+
 
 @click.group()
 @click.option('--dev', is_flag=True, default=False)
@@ -29,20 +46,6 @@ def init(ctx):
     DB.init_db(config.dict())
     db = DB.from_config(config.dict())
 
-class StandaloneApplication(BaseApplication):
-    def __init__(self, app, options=None):
-        self.options = options or {}
-        self.application = app
-        super().__init__()
-
-    def load_config(self):
-        config = {key: value for key, value in self.options.items()
-                if key in self.cfg.settings and value is not None}
-        for key, value in config.items():
-            self.cfg.set(key.lower(), value)
-
-    def load(self):
-        return self.application
     
 @main.command()
 @click.pass_context
@@ -71,10 +74,10 @@ def worker(ctx):
             )
     worker.start()
 
+
 @main.command()
 @click.pass_context
 def beat(ctx):
-    from celery.apps.beat import Beat
     config = ctx.obj['config']
     mq.conf.update(config.celery_config())
     b = Beat(app=mq,
