@@ -8,15 +8,28 @@ from app.config import Config
 
 from app.db import DB
 from app.filemaker_api import Filemaker
-import app.app
+#import app.app
+from functools import wraps
 
 logger = get_task_logger(__name__)
 
-config = Config().dict()
+#config = Config().dict()
 
-mq = Celery('ngs_pipeline', 
-        **Config().celery_config()
-        )
+# importantly, the config needs to be updated through the cli in app.py
+mq = Celery('ngs_pipeline')
+        #**Config().celery_config()
+        #)
+
+
+def dbconn(func):
+    @wraps(func)
+    def inner_func(*args, **kwargs):
+        ''' constructs and makes config and db accessible '''
+        config = mq.ngs_pipeline_config
+        db = DB.from_config(config)
+        return func(*args, **kwargs)
+
+    return inner_func
 
 
 @mq.task

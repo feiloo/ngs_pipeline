@@ -219,6 +219,17 @@ podman_args = [ 'podman', 'run', '-d']#, '--rm' ]
 
 @pytest.fixture(scope='session')
 def couchdb_server():
+    user = 'testuser'
+    psw = 'testpsw'
+    host = 'localhost'
+    port = 5984
+    url = f"http://{user}:{psw}@{host}:{port}"
+
+    server = couch.Server(url)
+    yield server
+    server.delete('ngs_app')
+
+def helper():
     args = [ 'podman', 'stop', '-i', 'test_couchdb' ]
     subprocess.run(args)
 

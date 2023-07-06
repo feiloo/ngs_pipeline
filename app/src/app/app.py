@@ -67,7 +67,8 @@ def run(ctx):
 @click.pass_context
 def worker(ctx):
     config = ctx.obj['config']
-    mq.conf.update(config.celery_config())
+    mq.ngs_pipeline_config = config
+    mq.conf.update(**config.celery_config())
     worker = mq.Worker(
             include=['app.app'],
             loglevel=logging.DEBUG,
@@ -79,7 +80,8 @@ def worker(ctx):
 @click.pass_context
 def beat(ctx):
     config = ctx.obj['config']
-    mq.conf.update(config.celery_config())
+    mq.ngs_pipeline_config = config
+    mq.conf.update(**config.celery_config())
     b = Beat(app=mq,
             schedule='/tmp/ngs_pipeline_beat_schedule',
 	    loglevel=logging.DEBUG,
