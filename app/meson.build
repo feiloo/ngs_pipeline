@@ -26,11 +26,24 @@ pyfiles = [
 	'src/app/workflow_backends.py'
 	]
 
+testfiles = [
+	'tests/test_app.py',
+	'tests/test_db.py',
+	'tests/test_filemaker_api.py',
+	'tests/test_parsers.py',
+	'tests/test_tasks_impl.py',
+	'tests/test_tasks.py',
+	'tests/test_tasks_utils.py',
+	'tests/test_ui.py',
+	'tests/test.wdl',
+	'tests/test_workflow_backends.py',
+	]
+
 # this has the python sources as inputs, for triggering change detection and caching
 # even though they arent used in the cp command
 # Warning, this copies all local files, not just the python sources
 copy_py_sources = custom_target('copy_py_sources',
-	input : pyfiles,
+	input : pyfiles + testfiles,
 	output : 'app',
 	command : ['cp', '-r', '@CURRENT_SOURCE_DIR@/../app/', '@OUTDIR@'],
 	install : false,
@@ -41,10 +54,10 @@ worker_outfile = 'ngs_pipeline_test.tar'
 
 # note, this runs from the meson build directory, therefore '.' as build context
 container_target = custom_target('ngs_pipeline_container_tests',
-	input : worker_infile,
+	input : [worker_infile] + pyfiles + testfiles,
 	output : worker_outfile,
 	depends : [copy_py_sources],
-	command : [container_engine, 'build', '-t', 'ngs_pipeline_test:latest', '-f', '@INPUT@', '-o', 'type=tar,dest=@OUTPUT@', '.'],
+	command : [container_engine, 'build', '-t', 'ngs_pipeline_test:latest', '-f', '@INPUT0@', '-o', 'type=tar,dest=@OUTPUT@', '.'],
 	install : false,
 	)
 

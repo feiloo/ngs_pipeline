@@ -15,6 +15,20 @@ run tests:
 package:
 `pip wheel . -w wheels`
 
+## building and testing with meson
+
+setup external build directory:
+`meson setup /tmp/ngs_pipeline_build'
+
+when you already have a build directory and changed the build files, you need to reconfigure it:
+`meson setup --reconfigure /tmp/ngs_pipeline_build'
+
+compile the pipeline docker container:
+`meson compile ngs_pipeline_container_tests'
+
+run the tests:
+`meson test container pytest_pod`
+
 
 ## setup
 

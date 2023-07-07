@@ -227,7 +227,6 @@ def couchdb_server():
 
     server = couch.Server(url)
     yield server
-    server.delete('ngs_app')
 
 def helper():
     args = [ 'podman', 'stop', '-i', 'test_couchdb' ]
@@ -273,6 +272,9 @@ def db(couchdb_server, config):
 
 @pytest.fixture(scope='session')
 def rabbitmq_server(config):
+    pass
+
+def helper2():
     args = podman_args + [
         '--name=test_rabbitmq', 
 	'-p', '5672:5672',
