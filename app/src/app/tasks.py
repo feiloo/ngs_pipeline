@@ -64,7 +64,6 @@ def start_workflow(self, workflow_inputs, panel_type):
 
 
 @mq.task
-@dbconn
 def start_pipeline(*args):
     '''
     this loads the sequencer output files into the database

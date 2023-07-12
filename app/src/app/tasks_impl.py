@@ -4,7 +4,6 @@ from time import sleep
 from itertools import count, groupby
 from pathlib import Path
 from datetime import datetime
-from itertools import count, groupby
 from uuid import uuid4
 from collections.abc import Callable
 
@@ -27,6 +26,7 @@ def build_obj(obj: dict) -> BaseDocument:
     data_obj = document_types[ty](map_id=True, **obj)
     return data_obj
 
+
 def query(db, query) -> List[BaseDocument]:
     l= list(db.query(query))
     return [build_obj(x['value']) for x in l]
@@ -36,6 +36,7 @@ def processor(record: dict) -> dict:
     d = record['fieldData']
     d['document_type'] = 'filemaker_record'
     return d
+
 
 def retrieve_new_filemaker_data_full(db, filemaker, processor, backoff_time=5):
     ''' 
@@ -283,9 +284,11 @@ def get_examination_of_sample(db, sample_path, missing_ok=False):
         raise RuntimeError(f"no examination found for sample: {sample}")
     elif len(examinations) >= 2:
         raise RuntimeError(f"multiple examinations found for sample: {sample} examinations: {examinations}")
-
-    examination = examinations[0]
-    return examination
+    elif missing_ok == True and len(examinations) == 0:
+        return None
+    else:
+        examination = examinations[0]
+        return examination
 
 
 def check_years_match(sequencer_run, samples):
@@ -347,7 +350,7 @@ def poll_sequencer_output(db, config):
         # because it has been renamed or manually copied
         # we save the parsed information too, so we can efficiently query the runs
 
-        # skipp creating sequencer run if it already exists
+        # skip creating sequencer run if it already exists
         if str(run_name) in db_sequencer_paths:
             continue
 

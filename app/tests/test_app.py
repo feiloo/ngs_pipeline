@@ -10,6 +10,7 @@ from app.db import DB
 from app.ui import create_app
 
 from click.testing import CliRunner
+from app.config import CONFIG, Config
 
 @pytest.fixture()
 def cli_runner():
@@ -35,7 +36,7 @@ def test_pipeline_status(db, config):
 
 @pytest.mark.incremental
 class TestAppStart:
-    def test_init_db(config, cli_runner, couchdb_server):
+    def test_init_db(self, config, cli_runner, couchdb_server):
         result = cli_runner.invoke(main, ['--dev','init'])
         assert result.exit_code == 0
         assert 'ngs_app' in couchdb_server

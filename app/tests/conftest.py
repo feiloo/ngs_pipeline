@@ -6,8 +6,7 @@ import json
 import pytest
 import pycouchdb as couch
 
-from app.constants import testconfig
-from app.config import Config
+from app.config import CONFIG, Config
 from app.app import main
 from app.ui import create_app
 
@@ -85,9 +84,14 @@ def pytest_runtest_setup(item):
                 pytest.xfail("previous test failed ({})".format(test_name))
 
 
-@pytest.fixture(scope='session')
+#@pytest.fixture(scope='session')
+@pytest.fixture()
 def config():
-    return Config(dev=True)
+    global CONFIG
+    CONFIG = Config()
+    CONFIG.set(dev=True)
+    yield CONFIG
+    CONFIG = Config()
 
 
 

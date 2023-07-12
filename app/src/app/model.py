@@ -58,7 +58,7 @@ filemaker_examination_types = [
 
 class BaseDocument(BaseModel):
     id: str
-    rev: Optional[str] 
+    rev: Optional[str] = None
     data_model_version: str = DATA_MODEL_VERSION
     document_type: str
     dirty: bool = True
@@ -90,7 +90,7 @@ class BaseDocument(BaseModel):
         return m
 
     class Config:
-        validate_assignment = False
+        validate_assignment = True
         frozen = True
 
 
@@ -159,10 +159,10 @@ class Examination(BaseDocument):
     started_date: datetime
     sequencer_runs: List[str]
     pipeline_runs: List[str]
-    filemaker_record: Optional[dict] 
-    last_sync_time: Optional[datetime] 
-    result: Optional[str] 
-    patient: Optional[str] 
+    filemaker_record: Optional[dict] = None
+    last_sync_time: Optional[datetime] = None
+    result: Optional[str] = None
+    patient: Optional[str] = None
 
     
 class Person(BaseDocument):

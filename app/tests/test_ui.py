@@ -7,7 +7,6 @@ import pytest
 from click.testing import CliRunner
 import pycouchdb as couch
 
-from app.constants import testconfig
 from app.config import Config
 from app.app import main
 from app.ui import create_app

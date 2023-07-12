@@ -1,7 +1,6 @@
 import pytest
 
 from app.parsers import parse_fastq_name
-from app.constants import testconfig
 from app.model import filemaker_examination_types, SequencerRun
 import app
 from app.tasks_impl import retrieve_new_filemaker_data_incremental
@@ -56,7 +55,6 @@ def test_retrieve_new_filemaker_data_incremental(monkeypatch, config, db, fm_moc
 
 
 def test_start_panel_workflow(config):
-    config=testconfig
     panel_type=None
     #start_panel_workflow(config, workflow_inputs, panel_type, sequencer_run_path)
 
