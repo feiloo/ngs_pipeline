@@ -1,5 +1,6 @@
 container_engine = find_program('podman')
-python_bin = find_program('/data/fhoelsch/.venv/bin/python3.9')
+python_bin = find_program('python3.11','python3.10','python3.9','python3.8')
+bash_bin = find_program('bash')
 
 pyfiles = [
 	'pyproject.toml',
@@ -49,19 +50,26 @@ copy_py_sources = custom_target('copy_py_sources',
 	install : false,
 	)
 
-worker_infile = 'containers/ngs_pipeline_tests.containerfile'
-worker_outfile = 'ngs_pipeline_test.tar'
+buildtype = get_option('buildtype')
+if buildtype == 'debug'
+	message('buildtype is @0@ enabeling tests'.format(buildtype)
+	containerfile = 'containers/ngs_pipeline_tests.containerfile'
+	container_image = 'ngs_pipeline_container_tests.tar'
+else
+	message('buildtype is @0@ disabeling tests'.format(buildtype)
+	containerfile = 'containers/ngs_pipeline.containerfile'
+	container_image = 'ngs_pipeline_container.tar'
+endif
 
 # note, this runs from the meson build directory, therefore '.' as build context
-container_target = custom_target('ngs_pipeline_container_tests',
-	input : [worker_infile] + pyfiles + testfiles,
-	output : worker_outfile,
+container_target = custom_target('ngs_pipeline_container',
+	input : [containerfile] + pyfiles,
+	output : container_image,
 	depends : [copy_py_sources],
-	command : [container_engine, 'build', '-t', 'ngs_pipeline_test:latest', '-f', '@INPUT0@', '-o', 'type=tar,dest=@OUTPUT@', '.'],
+	command : [container_engine, 'build', '-t', 'ngs_pipeline_container:latest', '-f', '@INPUT0@', '-o', 'type=tar,dest=@OUTPUT@', '.'],
+	build_by_default : true,
 	install : false,
 	)
-
-
 
 apppath = join_paths(meson.source_root(), 'app')
 testdir = join_paths(apppath, 'tests')
@@ -75,30 +83,12 @@ test('pytest', python_bin, args : [
 	], 
 	timeout: 600)
 
-bash = find_program('bash')
 test('container_pytest_pod', 
-	bash,
+	bash_bin,
 	args : [
 		'app/app/scripts/run_tests.sh'
 	], 
-	timeout: 600)
-
-test('container_pytest', 
-	container_engine,
-	args : [
-	'run',
-	'--rm',
-	'-ti',
-	'--pod',
-	'test_ngs_pipeline_pod',
-	'ngs_pipeline_test:latest',
-	'python3.10',
-	'-m',
-	'pytest', 
-	'/root/app',
-	'--testdir',
-	'/root/app/tests',
-	], 
+	depends : [container_target],
 	timeout: 600)
 
 #meson.add_install_script

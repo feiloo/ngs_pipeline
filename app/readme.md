@@ -52,6 +52,11 @@ start the background worker:
 start the frontent:
 `ngs_pipeline --dev run`
 
+## environments
+
+we aim to support both a native python/pip environemnt on opensuse leap and a podman pod based environment
+for simplicity for now, the fronend and backend are pacakged into the same python program
+
 ## design decisions
 
 * use python, because of speed, we're a small teams and its a well known language for scientific programming
