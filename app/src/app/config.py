@@ -3,7 +3,6 @@ from pydantic import BaseModel
 
 import json
 
-
 testconfig = {
         'couchdb_host': 'localhost',
         "couchdb_user":'testuser',
@@ -21,6 +20,7 @@ testconfig = {
         "dev":'true',
         "app_secret_key": '_5#y2L"F4Q8z\n\xec]/'
         }
+
 
 class ConfigParams(BaseModel):
     couchdb_host: str
@@ -40,15 +40,19 @@ class ConfigParams(BaseModel):
     workflow_output_dir: str
 
 
-class AConfig:
+class Config:
+    _params = None
+    _is_set = False
+
     def __init__(self):
         pass
-    def set(self, dev, path):
-        self.c = Configd(dev, path)
 
+    def set(self, dev: bool=False, path:Path=None):
+        if self._is_set:
+            raise RuntimeError('config is already set and should not be overwritten')
 
-class Config:
-    def __init__(self, dev: bool=False, path:Path=None):
+        self._is_set = True
+
         if dev == True:
             cfg = testconfig
         else:
@@ -60,19 +64,32 @@ class Config:
             with p.open('r') as f:
                 cfg = json.loads(f.read())
 
-        self.params = ConfigParams(**cfg)
+        self._params = ConfigParams(**cfg)
 
     def __getitem__(self, k):
         return self.dict()[k]
 
     def dict(self):
-        return self.params.dict()
+        if not self._is_set:
+            raise RuntimeError('config wasnt set yet')
+        return self._params.dict()
 
+    @property
+    def is_set(self):
+        return self._is_set
+
+    @property
     def celery_config(self):
+        if not self._is_set:
+            raise RuntimeError('config wasnt set yet')
+
         celery_config = { 
           'backend': f'couchdb://{self["couchdb_user"]}:{self["couchdb_psw"]}@localhost:5984/pipeline_results',
           'broker_url': f'pyamqp://{self["rabbitmq_user"]}:{self["rabbitmq_psw"]}@localhost//',
         }
         return celery_config
 
-CONFIG = AConfig()
+    def __str__(self):
+        return str(self._params)
+
+CONFIG = Config()

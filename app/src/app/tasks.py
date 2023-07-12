@@ -6,38 +6,27 @@ from app.tasks_impl import (run_app_schedule_impl, start_workflow_impl, processo
     retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients, poll_sequencer_output)
 
 from app.db import DB
+from app.config import CONFIG
 from app.filemaker_api import Filemaker
 #import app.app
 from functools import wraps
 
 logger = get_task_logger(__name__)
 
-#config = Config().dict()
-
 # importantly, the config needs to be updated through the cli in app.py
 mq = Celery('ngs_pipeline')
 
-def dbconn(func):
-    @wraps(func)
-    def inner_func(*args, **kwargs):
-        ''' constructs and makes config and db accessible '''
-        config = mq.ngs_pipeline_config
-        db = DB.from_config(config)
-        return func(*args, **kwargs)
-
-    return inner_func
-
 
 @mq.task
-def run_schedule(config):
-    db = DB.from_config(config)
-    run_app_schedule_impl(db, config)
+def run_schedule():
+    db = DB.from_config(CONFIG)
+    run_app_schedule_impl(db, CONFIG)
 
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     #sig = start_pipeline.signature(args=(config,))
-    sig = run_schedule.signature(args=(config,))
+    sig = run_schedule.signature(args=[])
     sender.add_periodic_task(10.0, sig, name='check for dynamically scheduled tasks')
 
     # sender.add_periodic_task(300.0, sig, name='sync filemaker to couchdb')
@@ -52,30 +41,31 @@ def setup_periodic_tasks(sender, **kwargs):
 
 
 @mq.task
-def sync_couchdb_to_filemaker(config):
-    db = DB.from_config(config)
-    filemaker = Filemaker.from_config(config)
+def sync_couchdb_to_filemaker():
+    db = DB.from_config(CONFIG)
+    filemaker = Filemaker.from_config(CONFIG)
     retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5)
-    create_examinations(db, config)
-    aggregate_patients(db, config)
+    create_examinations(db, CONFIG)
+    aggregate_patients(db, CONFIG)
 
 
 @mq.task
-def sync_sequencer_output(config):
-    db = DB.from_config(config)
-    poll_sequencer_output(db, config)
+def sync_sequencer_output():
+    db = DB.from_config(CONFIG)
+    poll_sequencer_output(db, CONFIG)
 
 
 @mq.task(bind=True, base=AbortableTask)
 # self because its an abortable task
 # aborting doesnt work yet
-def start_workflow(self, config, workflow_inputs, panel_type):
-    db = DB.from_config(config)
-    start_workflow_impl(self.is_aborted, db, config, workflow_inputs, panel_type)
+def start_workflow(self, workflow_inputs, panel_type):
+    db = DB.from_config(CONFIG)
+    start_workflow_impl(self.is_aborted, db, CONFIG, workflow_inputs, panel_type)
 
 
 @mq.task
-def start_pipeline(config):
+@dbconn
+def start_pipeline(*args):
     '''
     this loads the sequencer output files into the database
     compares if every sequencer run has an according pipeline run by the folder path

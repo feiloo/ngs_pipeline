@@ -7,7 +7,7 @@ from gunicorn.app.base import BaseApplication
 
 from app.tasks import mq
 from app.db import DB
-from app.config import Config
+from app.config import CONFIG
 from app.ui import create_app
 
 
@@ -37,28 +37,22 @@ class StandaloneApplication(BaseApplication):
         )
 @click.pass_context
 def main(ctx, dev, config):
-    cfg = Config(dev=dev, path=config)
     ctx.ensure_object(dict)
-    ctx.obj['config'] = cfg
+    CONFIG.set(dev=dev, path=config)
 
 
 @main.command()
 @click.pass_context
 def init(ctx):
-    config = ctx.obj['config']
-    DB.init_db(config.dict())
-    db = DB.from_config(config.dict())
-
+    DB.init_db(CONFIG.dict())
     
 @main.command()
 @click.pass_context
 def run(ctx):
-    config = ctx.obj['config']
-    mq.ngs_pipeline_config = config
-    mq.conf.update(**config.celery_config())
-    app = create_app(config.dict())
+    mq.conf.update(**CONFIG.celery_config)
+    app = create_app(CONFIG.dict())
 
-    if config['dev'] == True:
+    if CONFIG['dev'] == True:
         app.run(host='0.0.0.0', port=8000, debug=True)
     else:
         options = {
@@ -71,9 +65,7 @@ def run(ctx):
 @main.command()
 @click.pass_context
 def worker(ctx):
-    config = ctx.obj['config']
-    mq.ngs_pipeline_config = config
-    mq.conf.update(**config.celery_config())
+    mq.conf.update(**CONFIG.celery_config)
     worker = mq.Worker(
             include=['app.app'],
             loglevel=logging.DEBUG,
@@ -84,9 +76,7 @@ def worker(ctx):
 @main.command()
 @click.pass_context
 def beat(ctx):
-    config = ctx.obj['config']
-    mq.ngs_pipeline_config = config
-    mq.conf.update(**config.celery_config())
+    mq.conf.update(**CONFIG.celery_config)
     b = Beat(app=mq,
             schedule='/tmp/ngs_pipeline_beat_schedule',
 	    loglevel=logging.DEBUG,

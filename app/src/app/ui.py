@@ -1,10 +1,7 @@
 from datetime import datetime
-import logging
 
-from flask import Flask, render_template, flash, request, redirect, url_for, g, current_app, Blueprint
+from flask import Flask, render_template, request, redirect, g, current_app, Blueprint
 from werkzeug.utils import secure_filename
-
-import app.config
 
 from app.constants import *
 from app.model import panel_types, SequencerInputSample, TrackingForm, Examination, Patient
@@ -21,23 +18,19 @@ UPLOAD_FOLDER = '/tmp/uploads'
 
 admin = Blueprint('admin', __name__, url_prefix='/')
 
-#mq.conf.update(**app.config['data'].celery_config())
-
 def get_db(app):
     if 'app_db' not in g:
-        db = DB.from_config(app.config['data'])
+        db = DB.from_config(app.config['pipeline_config'])
         g.app_db = db
 
     return g.app_db
 
 
 def _get_pipeline_dashboard_html():
-    print(app.config.CONFIG)
     db = get_db(current_app)
     progress = 0
     pipeline_runs = list(db.query('pipeline_runs/all'))
     p = [x['value'] for x in pipeline_runs]
-
 
     dn = datetime.now()
     for pr in p:
@@ -72,12 +65,14 @@ def _get_pipeline_dashboard_html():
             panel_types=panel_types
             )
 
+
 @admin.route("/db/raw/<document_id>", methods=['get'])
 def raw_document_view(document_id):
     db = get_db(current_app)
     doc = db.get(document_id)
     ds = str(doc)
     return render_template('raw_db_document.html', doc=doc,ds=ds)
+
 
 @admin.route("/tracking_form", methods=['get'])
 def tracking_form():
@@ -165,14 +160,14 @@ def save_tracking_form():
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():
     current_app.logger.info('start pipeline')
-    result = start_pipeline.apply_async(args=(dict(current_app.config['data']),))
+    result = start_pipeline.apply_async(args=[])
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_sync", methods=['POST'])
 def pipeline_sync():
     current_app.logger.info('pipeline sync')
-    sync_couchdb_to_filemaker.apply_async(args=(dict(current_app.config['data']),))
-    sync_sequencer_output.apply_async(args=(dict(current_app.config['data']),))
+    sync_couchdb_to_filemaker.apply_async(args=[])
+    sync_sequencer_output.apply_async(args=[])
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_stop", methods=['POST'])
@@ -221,15 +216,11 @@ def root():
     return redirect('/pipeline_status')
 
 
-def create_app(config):
+def create_app(pipline_config):
     app = Flask(__name__)
-    app.config['data'] = config
-    admin.ngs_config = config
-
+    app.config['pipeline_config'] = pipline_config
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
     app.register_blueprint(admin)
-
-    app.config.CONFIG = config
 
     return app
