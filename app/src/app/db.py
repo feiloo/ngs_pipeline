@@ -195,17 +195,15 @@ def setup_views(app_db):
 ddocs = []
 
 x = '''
-if(doc.document_type == 'examination'){
-  emit(doc.started_date, doc);
+emit(doc.started_date, doc);
 '''
 examinations = basic_view('examinations', x, doctypes=['examination'])
 del x
 
 x = '''
-if(doc.document_type == 'examination'){
-  for(var i; i<doc.sequencer_runs.length; i++) {
-      emit(doc.sequencer_runs[i]._id, doc._id);
-  }
+for(var i=0; i<doc.sequencer_runs.length; i++) {
+  emit(doc.sequencer_runs[i]._id, doc._id);
+}
 '''
 examinations_sequencer_runs = basic_view('sequencer_runs', x, doctypes=['examination'])
 del x
@@ -213,6 +211,7 @@ del x
 x = '''
 if(doc.pipeline_runs.length === 0 && doc.sequencer_runs.length > 0){
   emit(doc, null);
+}
 '''
 unfinished_examinations = basic_view('unfinished', x, doctypes=['examination'])
 del x
@@ -266,8 +265,6 @@ del x
 patients_ddoc = DesignDoc('patients', [patient_aggregation, patient]).to_dict()
 ddocs.append(patients_ddoc)
 
-    #response = app_db.save_bulk(ddocs)
-
 
 def _get_db_url(config):
     user = config['couchdb_user']
@@ -276,6 +273,7 @@ def _get_db_url(config):
     port = 5984
     url = f"http://{user}:{psw}@{host}:{port}"
     return url
+
 
 class DB(couch.client.Database):
     @staticmethod
@@ -287,7 +285,9 @@ class DB(couch.client.Database):
         setup_views(db)
 
         db.views = ddocs
-        db.save_bulk(ddocs)
+        for doc in ddocs:
+            db.save(doc)
+        #res = db.save_bulk(ddocs)
 
         return db
 
@@ -353,4 +353,3 @@ def clean_init_filemaker_mirror():
         )
 
     return db
-

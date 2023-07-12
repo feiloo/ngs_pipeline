@@ -12,8 +12,11 @@ from app.ui import create_app
 
 
 class StandaloneApplication(BaseApplication):
-    def __init__(self, app, options=None):
-        self.options = options or {}
+    '''
+    implementation for the gunicorn application
+    '''
+    def __init__(self, app, options):
+        self.options = options
         self.application = app
         super().__init__()
 
@@ -51,6 +54,8 @@ def init(ctx):
 @click.pass_context
 def run(ctx):
     config = ctx.obj['config']
+    mq.ngs_pipeline_config = config
+    mq.conf.update(**config.celery_config())
     app = create_app(config.dict())
 
     if config['dev'] == True:

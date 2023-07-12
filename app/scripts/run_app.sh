@@ -33,7 +33,7 @@ podman run --rm \
 	-d \
 	--pod ngs \
 	--name ngs_pipeline_init \
-	ngs_pipeline_worker:latest \
+	ngs_pipeline_container:latest \
 	ngs_pipeline --dev init
 
 podman run --rm \
@@ -41,7 +41,7 @@ podman run --rm \
 	--pod ngs \
 	--name ngs_pipeline_worker \
 	-v /data/private_testdata/:/data/private_testdata/ \
-	ngs_pipeline_worker:latest \
+	ngs_pipeline_container:latest \
 	ngs_pipeline --dev worker
 
 podman run --rm \
@@ -49,5 +49,5 @@ podman run --rm \
 	--pod ngs \
 	-v /data/private_testdata/:/data/private_testdata/ \
 	--name ngs_pipeline_app \
-	ngs_pipeline_worker:latest \
+	ngs_pipeline_container:latest \
 	ngs_pipeline --dev run

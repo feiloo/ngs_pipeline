@@ -60,24 +60,6 @@ schema = [
      'ICD03']
 
 
-testconfig = {
-        'couchdb_host': 'localhost',
-        "couchdb_user":'testuser',
-        'couchdb_psw':'testpsw',
-        'clc_host': 'localhost',
-        'clc_user': 'testuser',
-        'clc_psw': 'testpsw',
-        'filemaker_server':'',
-        'filemaker_user':'',
-        'filemaker_psw':'',
-        'workflow_output_dir':'',
-        'rabbitmq_user':'testuser',
-        'rabbitmq_psw':'testpsw',
-        'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
-        "dev":'true',
-        "app_secret_key": '_5#y2L"F4Q8z\n\xec]/'
-        }
-
 
 filemaker_examination_types_workflow_mapping = {
         'DNA Lungenpanel Qiagen - kein nNGM Fall':'NGS DNA Lungenpanel',

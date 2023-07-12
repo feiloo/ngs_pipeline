@@ -1,9 +1,26 @@
 from pathlib import Path
 from pydantic import BaseModel
 
-from app.constants import testconfig
 import json
 
+
+testconfig = {
+        'couchdb_host': 'localhost',
+        "couchdb_user":'testuser',
+        'couchdb_psw':'testpsw',
+        'clc_host': 'localhost',
+        'clc_user': 'testuser',
+        'clc_psw': 'testpsw',
+        'filemaker_server':'',
+        'filemaker_user':'',
+        'filemaker_psw':'',
+        'workflow_output_dir':'',
+        'rabbitmq_user':'testuser',
+        'rabbitmq_psw':'testpsw',
+        'miseq_output_folder':'/data/private_testdata/miseq_output_testdata',
+        "dev":'true',
+        "app_secret_key": '_5#y2L"F4Q8z\n\xec]/'
+        }
 
 class ConfigParams(BaseModel):
     couchdb_host: str
@@ -18,9 +35,16 @@ class ConfigParams(BaseModel):
     filemaker_user: str
     filemaker_psw: str
     miseq_output_folder: str
-    dev: str
+    dev: bool
     app_secret_key: str
     workflow_output_dir: str
+
+
+class AConfig:
+    def __init__(self):
+        pass
+    def set(self, dev, path):
+        self.c = Configd(dev, path)
 
 
 class Config:
@@ -50,3 +74,5 @@ class Config:
           'broker_url': f'pyamqp://{self["rabbitmq_user"]}:{self["rabbitmq_psw"]}@localhost//',
         }
         return celery_config
+
+CONFIG = AConfig()

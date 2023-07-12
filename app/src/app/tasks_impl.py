@@ -124,7 +124,7 @@ def create_examinations(db, config):
     scan through all filemaker records and create an exam document
     for all filemaker records that didnt have one
 
-    save errors where duplicate examination exist
+    collect errors where duplicate examination exist
     
     examination records contain the original filemaker records
     '''
@@ -152,6 +152,7 @@ def create_examinations(db, config):
                 sequencer_runs=[],
                 pipeline_runs=[],
                 filemaker_record=d,
+                #last_sync_time=datetime.now(),
                 annotations={}
                 )
         db.save(exam.to_dict())
@@ -170,7 +171,9 @@ def get_names(examination):
 
 
 def create_patient_aggregate(examinations: [Examination]) -> Patient :
-    names = list(map(get_names, examinations))
+    # use the most recent names as the patients names
+    sorted_exams = sorted(examinations, key=lambda e: e.started_date)
+    names = list(map(get_names, sorted_exams))[-1]
 
     if len({e.filemaker_record['GBD'] for e in examinations}) != 1:
         logger.error(f'examination group {examinations} has multiple birthdates')
@@ -184,22 +187,16 @@ def create_patient_aggregate(examinations: [Examination]) -> Patient :
     if len({e.filemaker_record['Geschlecht'] for e in examinations}) != 1:
         logger.warn(f'detected gender change in patient of examinations {examinations}')
 
-    gend = list(sorted(
-            examinations,
-            key=lambda e: 
-                datetime.strptime(
-                    e.filemaker_record['Zeitstempel'],
-                    '%m/%d/%Y'
-                    )
-        ))[0].filemaker_record['Geschlecht']
+    gend = sorted_exams[-1].filemaker_record['Geschlecht']
+    eids = [e.id for e in examinations]
 
     patient = Patient(
         map_id=False,
         id=str(uuid4()),
-        names=names[0],
+        names=names,
         birthdate=birthdate, 
         gender=gend,
-        examinations=[e.id for e in examinations]
+        examinations=eids
         )
     return patient
 

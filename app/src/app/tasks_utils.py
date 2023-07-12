@@ -28,20 +28,14 @@ class Schedule:
         #app_state['sync_running'] = False
         self.db.save(app_state)
 
-    def is_enabled(self):
-        default_app_settings = {
-            '_id':'app_settings',
-            'schedule': '',
-            'autorun_pipeline':False
-        }
-
+    def is_enabled(self) -> bool:
         settings = self.db.get('app_settings')
-        return settings['autorun_pipeline'] == True
+        return settings['autorun_pipeline']
 
-
-    def has_work_now(self):
+    def has_work_now(self) -> bool:
         settings = self.db.get('app_settings')
         return settings['schedule'] == ''
+
 
 def drop(dict_, keys, ignore=False):
     ''' return dictionary without the specified keys

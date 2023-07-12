@@ -4,7 +4,6 @@ from celery.contrib.abortable import AbortableTask
 
 from app.tasks_impl import (run_app_schedule_impl, start_workflow_impl, processor,
     retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients, poll_sequencer_output)
-from app.config import Config
 
 from app.db import DB
 from app.filemaker_api import Filemaker
@@ -17,9 +16,6 @@ logger = get_task_logger(__name__)
 
 # importantly, the config needs to be updated through the cli in app.py
 mq = Celery('ngs_pipeline')
-        #**Config().celery_config()
-        #)
-
 
 def dbconn(func):
     @wraps(func)
@@ -59,7 +55,6 @@ def setup_periodic_tasks(sender, **kwargs):
 def sync_couchdb_to_filemaker(config):
     db = DB.from_config(config)
     filemaker = Filemaker.from_config(config)
-
     retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5)
     create_examinations(db, config)
     aggregate_patients(db, config)
@@ -76,7 +71,6 @@ def sync_sequencer_output(config):
 # aborting doesnt work yet
 def start_workflow(self, config, workflow_inputs, panel_type):
     db = DB.from_config(config)
-
     start_workflow_impl(self.is_aborted, db, config, workflow_inputs, panel_type)
 
 

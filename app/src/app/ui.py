@@ -4,11 +4,13 @@ import logging
 from flask import Flask, render_template, flash, request, redirect, url_for, g, current_app, Blueprint
 from werkzeug.utils import secure_filename
 
+import app.config
+
 from app.constants import *
 from app.model import panel_types, SequencerInputSample, TrackingForm, Examination, Patient
 
 from app.samplesheet import read_samplesheet
-from app.tasks import start_pipeline, sync_couchdb_to_filemaker, sync_sequencer_output
+from app.tasks import start_pipeline, sync_couchdb_to_filemaker, sync_sequencer_output, mq
 from app.db import DB
 
 import pycouchdb as couch
@@ -19,6 +21,8 @@ UPLOAD_FOLDER = '/tmp/uploads'
 
 admin = Blueprint('admin', __name__, url_prefix='/')
 
+#mq.conf.update(**app.config['data'].celery_config())
+
 def get_db(app):
     if 'app_db' not in g:
         db = DB.from_config(app.config['data'])
@@ -28,6 +32,7 @@ def get_db(app):
 
 
 def _get_pipeline_dashboard_html():
+    print(app.config.CONFIG)
     db = get_db(current_app)
     progress = 0
     pipeline_runs = list(db.query('pipeline_runs/all'))
@@ -219,9 +224,12 @@ def root():
 def create_app(config):
     app = Flask(__name__)
     app.config['data'] = config
+    admin.ngs_config = config
 
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
     app.register_blueprint(admin)
+
+    app.config.CONFIG = config
 
     return app
