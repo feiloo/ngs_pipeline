@@ -52,11 +52,11 @@ copy_py_sources = custom_target('copy_py_sources',
 
 buildtype = get_option('buildtype')
 if buildtype == 'debug'
-	message('buildtype is @0@ enabeling tests'.format(buildtype)
+	message('buildtype is @0@ enabeling tests'.format(buildtype))
 	containerfile = 'containers/ngs_pipeline_tests.containerfile'
 	container_image = 'ngs_pipeline_container_tests.tar'
 else
-	message('buildtype is @0@ disabeling tests'.format(buildtype)
+	message('buildtype is @0@ disabeling tests'.format(buildtype))
 	containerfile = 'containers/ngs_pipeline.containerfile'
 	container_image = 'ngs_pipeline_container.tar'
 endif

@@ -39,13 +39,12 @@ def testdir(request):
     else:
         return confval
 
-# marker for incremental tests, see https://docs.pytest.org/en/7.1.x/example/simple.html 
 
 
 # store history of failures per test class name and per index in parametrize (if parametrize used)
 _test_failed_incremental: Dict[str, Dict[Tuple[int, ...], str]] = {}
 
-
+# marker for incremental tests, see https://docs.pytest.org/en/7.1.x/example/simple.html 
 def pytest_runtest_makereport(item, call):
     if "incremental" in item.keywords:
         # incremental marker is used

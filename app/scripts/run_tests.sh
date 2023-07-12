@@ -32,8 +32,8 @@ podman run --rm \
  	--pod test_ngs_pipeline_pod \
  	--name test_ngs_pipeline \
  	-v /data/private_testdata/:/data/private_testdata/ \
- 	ngs_pipeline_test:latest \
+ 	ngs_pipeline_container:latest \
 	pytest /root/app --testdir /root/app/tests
 
 
-#podman pod stop test_ngs_pipeline_pod
+podman pod stop test_ngs_pipeline_pod
