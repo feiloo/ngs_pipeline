@@ -216,12 +216,10 @@ def aggregate_patients(db, config):
     for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'][0:-1])):
         g = list(group)
 
-        '''
         patient_entries = list(filter(
             lambda d: d['doc']['document_type'] == 'patient',
             g
             ))
-        '''
         examination_docs = list(filter(
             lambda d: d['doc']['document_type'] == 'examination',
             g
@@ -232,20 +230,13 @@ def aggregate_patients(db, config):
             ))
 
         examination_ids = [e.id for e in examinations]
-        patient_entries = list(flatten(
-            [list(db.query(f"patients/patient_examinations", key=i)) 
-                for i in examination_ids]
-            ))
+        patient_objs = [Patient(map_id=True, **(e['value'])) for e in patient_entries]
 
-        patient_entries = [Patient(map_id=True, **e['value']) for e in patient_entries]
-
-
-
-        if len(patient_entries) > 1:
+        if len(patient_objs) > 1:
             raise RuntimeError(f'too many patient objects for examination group: {g}')
-        elif len(patient_entries) == 1:
+        elif len(patient_objs) == 1:
             # found a patient, update patient examinations if there is a mismatch
-            pd = patient_entries[0]
+            pd = patient_objs[0]
 
             if pd.examinations != examination_ids:
                 new_patient = pd.to_dict()
@@ -335,7 +326,6 @@ def poll_sequencer_output(db, config):
 
     sequencer_runs = []
 
-
     for run_name in fs_miseq_output_runs:
         try:
             parsed = parse_miseq_run_name(run_name.name)
@@ -365,10 +355,19 @@ def poll_sequencer_output(db, config):
                 outputs=outputs
                 )
 
-        check_years_match(sequencer_run, outputs)
-        examinations = list(filter(lambda x: x is not None, 
-            [get_examination_of_sample(db, s, missing_ok=True) for s in outputs]
-            ))
+        try:
+            check_years_match(sequencer_run, outputs)
+        except Exception as e:
+            logger.error('sequencer run year could not be checked due to error: {e}')
+
+        examinations = []
+        for s in outputs:
+            try:
+                x = get_examination_of_sample(db, s, missing_ok=True)
+                if x is not None:
+                    examinations.append(x)
+            except Exception as e:
+                logger.error(f'examination could not be obtained for sample: {s} due to: {e}')
 
         new_exams = link_examinations_to_sequencer_run(examinations, sequencer_run.id)
 
@@ -377,9 +376,6 @@ def poll_sequencer_output(db, config):
         sequencer_runs.append(sequencer_run)
 
     return sequencer_runs
-
-
-
 
 def start_workflow_impl(
         is_aborted: Callable, 
@@ -433,14 +429,18 @@ def link_sequencer_run_to_examinations(db, config:dict, seq_run:SequencerRun):
     logger.debug(f'seq_run_year {seq_run_year}')
 
     for sample_path in outputs:
-        mp_number_with_year = get_mp_number_from_path(str(sample_path))
-        mp_number, mp_year = mp_number_with_year.split('-')
-        samplename_year = datetime.strptime(mp_year, '%y').year
+        try:
+            mp_number_with_year = get_mp_number_from_path(str(sample_path))
+            mp_number, mp_year = mp_number_with_year.split('-')
+            samplename_year = datetime.strptime(mp_year, '%y').year
 
 
-        # check that database year field matches filename year
-        if seq_run_year != samplename_year:
-            raise RuntimeError('year in the examination record mismatches with the year of the samplename')
+            # check that database year field matches filename year
+            if seq_run_year != samplename_year:
+                raise RuntimeError('year in the examination record mismatches with the year of the samplename')
+        except Exception as e:
+            logger.error(f'sample: {sample_path} has a misformatted name or is corrupted and caused: {e}')
+            continue
 
     new_run = {'value':seq_run.to_dict()}
 

@@ -250,7 +250,7 @@ if(doc.document_type == 'examination'){
   emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
   }
 if(doc.document_type == 'patient'){
-  emit([doc.filemaker_record.Name, doc.filemaker_record.Vorname, doc.filemaker_record.GBD, doc._id], doc._id);
+  emit([doc.names.firstname, doc.names.lastname, doc.birthdate, doc._id], doc._id);
   }
 '''
 patient_aggregation = basic_view('patient_aggregation', x)
