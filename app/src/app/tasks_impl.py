@@ -413,84 +413,11 @@ def start_workflow_impl(
                 }
             )
 
-
     pipeline_run = db.save_obj(pipeline_run)
-    #exam = db.query('examinations/examination_fm_join')
-    #p = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
 
     # pass is_aborted function to backend for stopping
     backend = 'noop'
     workflow_backend_execute(db, config, pipeline_run, is_aborted, backend)
-
-
-def link_sequencer_run_to_examinations(db, config:dict, seq_run:SequencerRun):
-    outputs = seq_run.outputs
-    seq_run_year = datetime.strptime(year_str, '%y%m%d').year
-    logger.debug(f'seq_run_year {seq_run_year}')
-
-    for sample_path in outputs:
-        try:
-            mp_number_with_year = get_mp_number_from_path(str(sample_path))
-            mp_number, mp_year = mp_number_with_year.split('-')
-            samplename_year = datetime.strptime(mp_year, '%y').year
-
-
-            # check that database year field matches filename year
-            if seq_run_year != samplename_year:
-                raise RuntimeError('year in the examination record mismatches with the year of the samplename')
-        except Exception as e:
-            logger.error(f'sample: {sample_path} has a misformatted name or is corrupted and caused: {e}')
-            continue
-
-    new_run = {'value':seq_run.to_dict()}
-
-    year_str = new_run['value']['parsed']['date']
-    year = datetime.strptime(year_str, '%y%m%d').year
-    samples = []
-
-    sample_paths = list((
-            Path(config['miseq_output_folder']) 
-            / Path(new_run['value']['original_path']).name
-            ).rglob('*.fastq.gz'))
-
-    return sample_paths
-
-    for sample_path in sample_paths:
-        try:
-            mp_number_with_year = get_mp_number_from_path(str(sample_path))
-            mp_number, mp_year = mp_number_with_year.split('-')
-            samplename_year = datetime.strptime(mp_year, '%y').year
-
-            # check that database year field matches filename year
-            if year != samplename_year:
-                raise RuntimeError('year in the examination record mismatches with the year of the samplename')
-
-            #get the the examination the sample belongs to
-            examination = list(db.query(f'examinations/mp_number?key=[{year},{mp_number}]'))
-            logger.info(f' handeling sequencer run with sample: {sample_path} mp_number: {mp_number} and examination: {p}')
-
-            if len(p) != 1:
-                panel_type = 'invalid'
-            else:
-                panel_type = p[0]['value']['examinationtype']
-
-        
-            if panel_type == 'invalid':
-                raise RuntimeError(f'panel type invalid, because {len(p)} examinations were found')
-
-            samples.append({
-                'path':sample_path, 
-                'mp_number': mp_number, 
-                'mp_year': mp_year,
-                'panel_type': panel_type,
-                'sequencer_run': new_run,
-                })
-
-            examination['sequencer_runs'] = examinations['sequencer_runs'] + [ seq_run.id ]
-
-        except Exception as e:
-            logger.warning(f'error: {e}')
-            continue
 
 
 def group_samples_by_panel(samples):
@@ -555,10 +482,6 @@ def collect_new_runs(db, config):
 
 
 def collect_work(db, config):
-    new_sequencer_runs = poll_sequencer_output(db, config)
-    for s in new_sequencer_runs:
-        link_sequencer_run_to_examinations(db, config, s)
-
     #new_runs = collect_new_runs(db,config)
     new_examinations = list(db.query('examinations/unfinished'))
 
