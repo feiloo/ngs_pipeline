@@ -39,6 +39,7 @@ class StandaloneApplication(BaseApplication):
 def main(ctx, dev, config):
     ctx.ensure_object(dict)
     CONFIG.set(dev=dev, path=config)
+    DB.from_config(CONFIG)
 
 
 @main.command()

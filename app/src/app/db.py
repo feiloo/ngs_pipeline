@@ -275,21 +275,60 @@ def _get_db_url(config):
     return url
 
 
-class DB(couch.client.Database):
+class Db:
+    '''
+    class that wraps pycouchdb to extend and adapt functionality
+    '''
+
+    server = None
+    couchdb = None
+    name = 'ngs_app'
+
+    def __init__(self):
+        pass
+
+    def _check_con(self):
+        if not self._check_initialized():
+            raise RuntimeError('trying to connect to uninitialized database')
+        if self.server is None:
+            raise RuntimeError('trying to connect but Db server is None, ensure db connection was called')
+        if self.couchdb is None:
+            raise RuntimeError('trying to connect but Db client is None, ensure db connection was called')
+
+    def _check_initialized(self):
+        return self.name in self.server
+
+    def get(self, *args, **kwargs):
+        self._check_con()
+        return self.couchdb.get(*args,**kwargs)
+
+    def save(self, *args, **kwargs):
+        self._check_con()
+        return self.couchdb.save(*args,**kwargs)
+
+    def save_bulk(self, *args, **kwargs):
+        self._check_con()
+        return self.couchdb.save_bulk(*args,**kwargs)
+
+    def delete(self, *args, **kwargs):
+        self._check_con()
+        return self.couchdb.delete(*args,**kwargs)
+
+    def query(self, *args, **kwargs):
+        self._check_con()
+        return self.couchdb.query(*args,**kwargs)
+    
     @staticmethod
     def init_db(config):
         server = couch.Server(_get_db_url(config))
-        server.create('ngs_app')
-        db = DB.from_config(config)
-
+        server.create(self.name)
+        db = Db.from_config(config)
         setup_views(db)
 
         db.views = ddocs
         for doc in ddocs:
             db.save(doc)
-        #res = db.save_bulk(ddocs)
 
-        return db
 
     def view(self, viewname, value=True):
         if value==True:
@@ -297,20 +336,16 @@ class DB(couch.client.Database):
             return [x['value'] for x in res]
 
 
-    @staticmethod
-    def from_config(config):
+    #@staticmethod
+    def from_config(self, config):
+        if not config.is_set:
+            raise RuntimeError('cant create db from config if config is not set yet')
+
         url = _get_db_url(config)
-        server = couch.Server(url)
-        #app_db = server.database('ngs_app')
-        name = 'ngs_app'
+        self.server = couch.Server(url)
+        self.couchdb = self.server.database(self.name)
+        return Db()
 
-        # origin from https://github.com/histrio/py-couchdb/blob/919f2f36a2b11c3e460f2014c20c106c0db11523/pycouchdb/client.py#L157
-        (r, result) = server.resource.head(name)
-        if r.status_code == 404:
-                raise exp.NotFound("Database '{0}' does not exists".format(name))
-
-        db = DB(server.resource(name), name)
-        return db
 
     def save_obj(self, obj):
         ''' save the pydantic object '''
@@ -353,3 +388,6 @@ def clean_init_filemaker_mirror():
         )
 
     return db
+
+#DB = Db.from_config(CONFIG)
+DB = Db()

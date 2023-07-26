@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, redirect, g, current_app, Blu
 from werkzeug.utils import secure_filename
 
 from app.constants import *
+from app.config import CONFIG
 from app.model import panel_types, SequencerInputSample, Examination, Patient
 
 from app.tasks import start_pipeline, sync_couchdb_to_filemaker, sync_sequencer_output, mq
@@ -18,11 +19,15 @@ UPLOAD_FOLDER = '/tmp/uploads'
 admin = Blueprint('admin', __name__, url_prefix='/')
 
 def get_db(app):
-    if 'app_db' not in g:
-        db = DB.from_config(app.config['pipeline_config'])
-        g.app_db = db
+    return DB
 
-    return g.app_db
+    '''
+    if 'app_db' not in g:
+        db = DB.from_config(CONFIG)
+        g.app_db = DB
+
+    return DB
+    '''
 
 
 def _get_pipeline_dashboard_html():
@@ -131,5 +136,6 @@ def create_app(pipline_config):
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000
     app.register_blueprint(admin)
+    DB.from_config(CONFIG)
 
     return app
