@@ -230,7 +230,7 @@ def aggregate_patients(db, config):
             ))
 
         examination_ids = [e.id for e in examinations]
-        patient_objs = [Patient(map_id=True, **(e['value'])) for e in patient_entries]
+        patient_objs = [Patient(map_id=True, **(e['doc'])) for e in patient_entries]
 
         if len(patient_objs) > 1:
             raise RuntimeError(f'too many patient objects for examination group: {g}')
@@ -280,6 +280,26 @@ def get_examination_of_sample(db, sample_path, missing_ok=False):
     else:
         examination = examinations[0]
         return examination
+
+
+def get_mp_number_from_filemaker_record(rec):
+    mpnr = str(int(rec['Mol_NR'])) + '-' + str(rec['Jahr'])[-2:]
+    return mpnr
+
+def get_samples_of_examination(db, examination):
+    ex_mpnr = get_mp_number_from_filemaker_record(examination.filemaker_record)
+    print(examination.sequencer_runs)
+    
+    sample_candidates = []
+    for srid in examination.sequencer_runs:
+        sample_candidates += db.get(srid)['outputs']
+
+    examination_samples = []
+    for sa in sample_candidates:
+        if get_mp_number_from_path(sa) == ex_mpnr:
+            examinations_samples.append(sa)
+
+    return examination_samples
 
 
 def check_years_match(sequencer_run, samples):
@@ -377,11 +397,18 @@ def poll_sequencer_output(db, config):
 
     return sequencer_runs
 
+
 def start_workflow_impl(
         is_aborted: Callable, 
-        db, config, workflow_inputs, panel_type: str):
+        db, 
+        config, 
+        workflow_inputs, 
+        panel_type: str
+        ):
 
     logger.info(f'starting new pipeline run with inputs: {workflow_inputs} and panel: {panel_type}')
+
+    examinations, samples = list(zip(*workflow_inputs))
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
@@ -404,7 +431,7 @@ def start_workflow_impl(
             False,
             id=str(uuid4()),
             created_time=datetime.now(),
-            input_samples=[str(x) for x in workflow_inputs],
+            input_samples=[str(x) for x in samples],
             workflow=workflow,
             status='running',
             logs={
@@ -413,10 +440,22 @@ def start_workflow_impl(
                 }
             )
 
+    # link pipeline runs to the examinations
+    new_ex_docs = []
+    for e in examinations:
+        d = e
+        d['pipeline_runs'] = e['pipeline_runs'] + [pipeline_run.id]
+        new_ex_docs.append(d)
+
     pipeline_run = db.save_obj(pipeline_run)
+    db.save_bulk(new_ex_docs)
+
 
     # pass is_aborted function to backend for stopping
-    backend = 'noop'
+    if 'backend' in config:
+        backend = config['backend']
+    else:
+        backend = 'nextflow'
     workflow_backend_execute(db, config, pipeline_run, is_aborted, backend)
 
 
@@ -481,11 +520,28 @@ def collect_new_runs(db, config):
     return new_runs
 
 
-def collect_work(db, config):
-    #new_runs = collect_new_runs(db,config)
-    new_examinations = list(db.query('examinations/unfinished'))
+def group_examinations_by_type(examinations):
+    groups = {}
+    for e in examinations:
+        ty = e.filemaker_record['Untersuchung']
+        if ty not in filemaker_examination_types:
+            ty = 'invalid'
 
-    return new_examinations
+        if ty not in groups:
+            groups[ty] = [e]
+        else:
+            groups[ty] = groups[ty] + [e]
+
+    return groups
+
+
+def collect_work(db):
+    #new_runs = collect_new_runs(db,config)
+    new_examinations = list(db.query('examinations/new_examinations'))
+    new_examinations = [Examination(True, **(e['value'])) for e in new_examinations]
+    groups = group_examinations_by_type(new_examinations)
+    return groups
+
 
 
 def run_app_schedule_impl(db, config):

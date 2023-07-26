@@ -2,8 +2,10 @@ from celery import Celery, chain, group
 from celery.utils.log import get_task_logger
 from celery.contrib.abortable import AbortableTask
 
+from app.model import filemaker_examination_types
 from app.tasks_impl import (run_app_schedule_impl, start_workflow_impl, processor,
-    retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients, poll_sequencer_output)
+    retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients, 
+    poll_sequencer_output, collect_work, get_samples_of_examination)
 
 from app.db import DB
 from app.config import CONFIG
@@ -70,24 +72,50 @@ def start_pipeline(*args):
     compares if every sequencer run has an according pipeline run by the folder path
 
     if not, it runs the pipeline for the missing ones
-    sync_couchdb_to_filemaker
-    new_examinations = collect_work()
+    '''
 
+    db = DB.from_config(CONFIG)
 
+    #sync_couchdb_to_filemaker()
+    sync_sequencer_output()
+    groups = collect_work(db)
 
-    db = DB.from_config(config)
-    start_workflow_tasks = app_start_pipeline(db, config)
-    return
+    work = {}
+
+    for panel in filemaker_examination_types:
+        if panel not in groups:
+            continue
+
+        examinations = groups[panel]
+        work[panel] = []
+
+        for e in examinations:
+            try:
+                ex_samples = get_samples_of_examination(db, e)
+                if len(ex_samples) > 1:
+                    pass
+                    #logger.error(f'more than one sample found for new_examination: {e}')
+                elif len(ex_samples) == 0:
+                    pass
+                    #logger.info(f'no sample found yet for new_examination: {e}')
+                else:
+                    work[panel] = work[panel] + [(e, ex_samples[0])]
+            except Exception as e:
+                logger.error(f'cant obtain sample of examination: {e}')
 
     tasks = []
-    for task_args in start_workflow_tasks:
-        signature = start_panel_workflow.s(*task_args)
+    for panel in work.keys():
+        workflow_inputs = work[panel]
+        if len(workflow_inputs) == 0:
+            continue
+        signature = start_workflow.s(workflow_inputs, panel)
         tasks.append(signature)
 
     lazy_group = group(tasks)
     promise = lazy_group.apply_async()
 
     return promise
-    '''
 
 
+    #plan_pipeline_runs()
+    #run_pipeline_runs()
