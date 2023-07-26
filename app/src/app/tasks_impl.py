@@ -18,6 +18,7 @@ from app.tasks_utils import Timeout, Schedule
 from app.workflow_backends import workflow_backend_execute
 
 from app.db import DB
+from app.config import CONFIG
 
 import pycouchdb
 
@@ -348,7 +349,7 @@ def poll_sequencer_output():
     db_sequencer_runs = db.query('sequencer_runs/all')
     db_sequencer_paths = [str(r['value']['original_path']) for r in db_sequencer_runs]
 
-    fs_miseq_output_path = Path(config['miseq_output_folder'])
+    fs_miseq_output_path = Path(CONFIG['miseq_output_folder'])
     fs_miseq_output_runs = [fs_miseq_output_path / x for x in fs_miseq_output_path.iterdir()]
 
     sequencer_runs = []
@@ -407,7 +408,6 @@ def poll_sequencer_output():
 
 def start_workflow_impl(
         is_aborted: Callable, 
-        config, 
         workflow_inputs, 
         panel_type: str
         ):
@@ -458,8 +458,8 @@ def start_workflow_impl(
 
 
     # pass is_aborted function to backend for stopping
-    if 'backend' in config:
-        backend = config['backend']
+    if 'backend' in CONFIG:
+        backend = CONFIG['backend']
     else:
         backend = 'nextflow'
     workflow_backend_execute(pipeline_run, is_aborted, backend)
@@ -490,7 +490,6 @@ def group_samples_by_panel(samples):
         sequencer_run_path = new_run['value']['original_path']
 
         task_args = (
-                config, 
                 workflow_inputs, 
                 panel_type, 
                 sequencer_run_path
@@ -556,8 +555,8 @@ def run_app_schedule_impl():
 
     try:
         if schedule.is_enabled() and schedule.has_work_now():
-            s1 = sync_couchdb_to_filemaker.s(config)
-            s2 = start_pipeline.s(config)
+            s1 = sync_couchdb_to_filemaker.s()
+            s2 = start_pipeline.s()
             res = chain(s1, s2)
             res.apply_async()
     finally:
