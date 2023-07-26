@@ -45,7 +45,7 @@ def main(ctx, dev, config):
 @main.command()
 @click.pass_context
 def init(ctx):
-    DB.init_db(CONFIG.dict())
+    DB.init_db(CONFIG)
 
     
 @main.command()

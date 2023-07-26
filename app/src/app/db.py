@@ -318,16 +318,16 @@ class Db:
         self._check_con()
         return self.couchdb.query(*args,**kwargs)
     
-    @staticmethod
-    def init_db(config):
+    #@staticmethod
+    def init_db(self, config):
         server = couch.Server(_get_db_url(config))
         server.create(self.name)
-        db = Db.from_config(config)
-        setup_views(db)
+        self.from_config(config)
+        setup_views(self.couchdb)
 
-        db.views = ddocs
+        self.views = ddocs
         for doc in ddocs:
-            db.save(doc)
+            self.save(doc)
 
 
     def view(self, viewname, value=True):
