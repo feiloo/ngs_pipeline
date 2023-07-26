@@ -209,11 +209,11 @@ examinations_sequencer_runs = basic_view('sequencer_runs', x, doctypes=['examina
 del x
 
 x = '''
-if(doc.pipeline_runs.length === 0 && doc.sequencer_runs.length > 0){
-  emit(doc, null);
+if(doc.pipeline_runs.length === 0 && doc.sequencer_runs.length >= 0){
+  emit(doc._id, doc);
 }
 '''
-unfinished_examinations = basic_view('unfinished', x, doctypes=['examination'])
+new_examinations = basic_view('new_examinations', x, doctypes=['examination'])
 del x
 
 x = '''
@@ -238,7 +238,7 @@ examinations_mp_number = basic_view('mp_number', x, doctypes=['examination'])
 del x
 
 examinations_ddoc = DesignDoc('examinations', [
-    unfinished_examinations, 
+    new_examinations, 
     examinations,
     examinations_mp_number
     ]).to_dict()
