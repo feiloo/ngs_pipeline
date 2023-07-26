@@ -31,7 +31,7 @@ def build_obj(obj: dict) -> BaseDocument:
     return data_obj
 
 
-def query(db, query) -> List[BaseDocument]:
+def query(query) -> List[BaseDocument]:
     l = db.query(query)
     return [build_obj(x['value']) for x in l]
 
@@ -42,7 +42,7 @@ def processor(record: dict) -> dict:
     return d
 
 
-def retrieve_new_filemaker_data_full(db, filemaker, processor, backoff_time=5):
+def retrieve_new_filemaker_data_full(filemaker, processor, backoff_time=5):
     ''' 
     iterate through all filemaker records in the table
     do so in 1000 record batches until an error signals
@@ -72,7 +72,7 @@ def retrieve_new_filemaker_data_full(db, filemaker, processor, backoff_time=5):
     return batches_done
 
 
-def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5):
+def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5):
     '''
     iterate through the highest filemaker records according to recordid and appstate
     do so in 1000 record batches
@@ -127,7 +127,7 @@ def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_ti
     return batches_done
 
 
-def create_examinations(db, config):
+def create_examinations():
     '''
     scan through all filemaker records and create an exam document
     for all filemaker records that didnt have one
@@ -209,7 +209,7 @@ def create_patient_aggregate(examinations: [Examination]) -> Patient :
     return patient
 
 
-def aggregate_patients(db, config):
+def aggregate_patients():
     ''' scan through all examination documents and group
     them by [name, birthdate] (see the patients/patient_aggregation view)
     create a patient document for every group
@@ -217,7 +217,7 @@ def aggregate_patients(db, config):
     link the patient and exam documents by their id's
     '''
     logger.info('aggregating patients')
-    it = list(db.query('patients/patient_aggregation?include_docs=true'))
+    it = db.query('patients/patient_aggregation?include_docs=true')
     logger.info('grouping examinations for patient aggregation')
 
     for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'][0:-1])):
@@ -268,7 +268,7 @@ def get_mp_number_from_path(p):
     return d['sample_name']
 
 
-def get_examination_of_sample(db, sample_path, missing_ok=False):
+def get_examination_of_sample(sample_path, missing_ok=False):
     mp_number_with_year = get_mp_number_from_path(str(sample_path))
     mp_number, mp_year = mp_number_with_year.split('-')
 
@@ -293,7 +293,7 @@ def get_mp_number_from_filemaker_record(rec):
     mpnr = str(int(rec['Mol_NR'])) + '-' + str(rec['Jahr'])[-2:]
     return mpnr
 
-def get_samples_of_examination(db, examination):
+def get_samples_of_examination(examination):
     ex_mpnr = get_mp_number_from_filemaker_record(examination.filemaker_record)
     print(examination.sequencer_runs)
     
@@ -340,7 +340,7 @@ def link_examinations_to_sequencer_run(examinations: dict, seq_run_id: str):
 
 
 
-def poll_sequencer_output(db, config):
+def poll_sequencer_output():
     ''' ingest sequencer data from filepath
     '''
 
@@ -407,7 +407,6 @@ def poll_sequencer_output(db, config):
 
 def start_workflow_impl(
         is_aborted: Callable, 
-        db, 
         config, 
         workflow_inputs, 
         panel_type: str
@@ -463,7 +462,7 @@ def start_workflow_impl(
         backend = config['backend']
     else:
         backend = 'nextflow'
-    workflow_backend_execute(db, config, pipeline_run, is_aborted, backend)
+    workflow_backend_execute(pipeline_run, is_aborted, backend)
 
 
 def group_samples_by_panel(samples):
@@ -502,7 +501,7 @@ def group_samples_by_panel(samples):
     return start_panel_workflow_tasks
 
 
-def collect_new_runs(db, config):
+def collect_new_runs():
     logger.info(f'started collecting new runs')
 
     sequencer_runs = db.query('sequencer_runs/all')
@@ -542,7 +541,7 @@ def group_examinations_by_type(examinations):
     return groups
 
 
-def collect_work(db):
+def collect_work():
     #new_runs = collect_new_runs(db,config)
     new_examinations = db.query('examinations/new_examinations')
     new_examinations = [Examination(True, **(e['value'])) for e in new_examinations]
@@ -551,7 +550,7 @@ def collect_work(db):
 
 
 
-def run_app_schedule_impl(db, config):
+def run_app_schedule_impl():
     schedule = Schedule(db)
     schedule.acquire_lock()
 

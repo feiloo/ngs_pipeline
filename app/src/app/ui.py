@@ -18,20 +18,9 @@ UPLOAD_FOLDER = '/tmp/uploads'
 
 admin = Blueprint('admin', __name__, url_prefix='/')
 
-def get_db(app):
-    return DB
-
-    '''
-    if 'app_db' not in g:
-        db = DB.from_config(CONFIG)
-        g.app_db = DB
-
-    return DB
-    '''
-
+db = DB
 
 def _get_pipeline_dashboard_html():
-    db = get_db(current_app)
     progress = 0
     pipeline_runs = db.query('pipeline_runs/all')
     p = [x['value'] for x in pipeline_runs]
@@ -74,7 +63,6 @@ def _get_pipeline_dashboard_html():
 
 @admin.route("/db/raw/<document_id>", methods=['get'])
 def raw_document_view(document_id):
-    db = get_db(current_app)
     doc = db.get(document_id)
     ds = str(doc)
     return render_template('raw_db_document.html', doc=doc,ds=ds)
@@ -117,7 +105,6 @@ def pipeline_status():
 
 @admin.route("/pipeline_autorun_enable", methods=['POST'])
 def pipeline_autorun_enable():
-    db = get_db(current_app)
     settings = db.get('app_settings')
     settings['autorun_pipeline'] = True
     db.save(settings)
@@ -126,7 +113,6 @@ def pipeline_autorun_enable():
 
 @admin.route("/pipeline_autorun_disable", methods=['POST'])
 def pipeline_autorun_disable():
-    db = get_db(current_app)
     settings = db.get('app_settings')
     settings['autorun_pipeline'] = False
     db.save(settings)

@@ -23,7 +23,7 @@ db = DB
 
 @mq.task
 def run_schedule():
-    run_app_schedule_impl(db, CONFIG)
+    run_app_schedule_impl()
 
 
 @mq.on_after_configure.connect
@@ -46,21 +46,21 @@ def setup_periodic_tasks(sender, **kwargs):
 @mq.task
 def sync_couchdb_to_filemaker():
     filemaker = Filemaker.from_config(CONFIG)
-    retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5)
-    create_examinations(db, CONFIG)
-    aggregate_patients(db, CONFIG)
+    retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5)
+    create_examinations()
+    aggregate_patients()
 
 
 @mq.task
 def sync_sequencer_output():
-    poll_sequencer_output(db, CONFIG)
+    poll_sequencer_output()
 
 
 @mq.task(bind=True, base=AbortableTask)
 # self because its an abortable task
 # aborting doesnt work yet
 def start_workflow(self, workflow_inputs, panel_type):
-    start_workflow_impl(self.is_aborted, db, CONFIG, workflow_inputs, panel_type)
+    start_workflow_impl(self.is_aborted, workflow_inputs, panel_type)
 
 
 @mq.task
@@ -74,7 +74,7 @@ def start_pipeline(*args):
 
     #sync_couchdb_to_filemaker()
     sync_sequencer_output()
-    groups = collect_work(db)
+    groups = collect_work()
 
     work = {}
 
@@ -87,7 +87,7 @@ def start_pipeline(*args):
 
         for e in examinations:
             try:
-                ex_samples = get_samples_of_examination(db, e)
+                ex_samples = get_samples_of_examination(e)
                 if len(ex_samples) > 1:
                     pass
                     #logger.error(f'more than one sample found for new_examination: {e}')
