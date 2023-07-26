@@ -323,6 +323,8 @@ class Db:
 
     def query(self, *args, **kwargs):
         self._check_con()
+        if 'as_list' not in kwargs.keys():
+            kwargs['as_list'] = True
         return self.couchdb.query(*args,**kwargs)
     
     #@staticmethod
@@ -339,7 +341,7 @@ class Db:
 
     def view(self, viewname, value=True):
         if value==True:
-            res = self.query(viewname, as_list=True)
+            res = self.query(viewname)
             return [x['value'] for x in res]
 
 

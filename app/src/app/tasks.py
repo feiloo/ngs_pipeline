@@ -19,9 +19,10 @@ logger = get_task_logger(__name__)
 mq = Celery('ngs_pipeline')
 
 
+db = DB
+
 @mq.task
 def run_schedule():
-    db = DB.from_config(CONFIG)
     run_app_schedule_impl(db, CONFIG)
 
 
@@ -44,7 +45,6 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @mq.task
 def sync_couchdb_to_filemaker():
-    db = DB.from_config(CONFIG)
     filemaker = Filemaker.from_config(CONFIG)
     retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_time=5)
     create_examinations(db, CONFIG)
@@ -53,7 +53,6 @@ def sync_couchdb_to_filemaker():
 
 @mq.task
 def sync_sequencer_output():
-    db = DB.from_config(CONFIG)
     poll_sequencer_output(db, CONFIG)
 
 
@@ -61,7 +60,6 @@ def sync_sequencer_output():
 # self because its an abortable task
 # aborting doesnt work yet
 def start_workflow(self, workflow_inputs, panel_type):
-    db = DB.from_config(CONFIG)
     start_workflow_impl(self.is_aborted, db, CONFIG, workflow_inputs, panel_type)
 
 
@@ -73,8 +71,6 @@ def start_pipeline(*args):
 
     if not, it runs the pipeline for the missing ones
     '''
-
-    db = DB.from_config(CONFIG)
 
     #sync_couchdb_to_filemaker()
     sync_sequencer_output()

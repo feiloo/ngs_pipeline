@@ -17,9 +17,13 @@ from app.constants import filemaker_examination_types_workflow_mapping, workflow
 from app.tasks_utils import Timeout, Schedule
 from app.workflow_backends import workflow_backend_execute
 
+from app.db import DB
+
 import pycouchdb
 
 logger = get_task_logger(__name__)
+
+db = DB
 
 def build_obj(obj: dict) -> BaseDocument:
     ty = obj['document_type']
@@ -28,7 +32,7 @@ def build_obj(obj: dict) -> BaseDocument:
 
 
 def query(db, query) -> List[BaseDocument]:
-    l= list(db.query(query))
+    l = db.query(query)
     return [build_obj(x['value']) for x in l]
 
 
@@ -78,7 +82,7 @@ def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_ti
     '''
     timeout = Timeout(2*60*60) # 2h in seconds
 
-    app_state = db.get('app_state')
+    app_state = DB.get('app_state')
     last_synced_row = int(app_state['last_synced_filemaker_row'])
     # annoyingly, filemaker rows start with one, so we need to set last_synced row to 0 initially
     # and after, it will match the highest rowid, but the number ow rows will be last_synced_row-1
@@ -90,7 +94,8 @@ def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_ti
         try:
             # backoff for a few seconds
             sleep(backoff_time)
-            response = filemaker.get_all_records(offset=batches_done*1000+last_synced_row+1, limit=1000)
+            offset = batches_done*1000 + last_synced_row+1
+            response = filemaker.get_all_records(offset=offset, limit=1000)
             records = list(response['data'])
             logger.debug(f"retrieved {len(records)} filemaker_rows")
             logger.debug(f"last_synced_row_was {last_synced_row} and record id was {records[0]['recordId']}")
@@ -100,12 +105,14 @@ def retrieve_new_filemaker_data_incremental(db, filemaker, processor, backoff_ti
                 logger.error(f"record id doesnt match last_synced_row with record {records}")
                 raise RuntimeError('record id doesnt match last_synced_row')
 
-            rowids = list(map(lambda x: int(x['recordId']), records))
-            app_state['last_synced_filemaker_row'] = max(rowids)
+            #rowids = list(map(lambda x: int(x['recordId']), records))
+            #app_state['last_synced_filemaker_row'] = max(rowids)
+            app_state['last_synced_filemaker_row'] = offset + len(records)
             newdocs = list(map(processor, records)) + [app_state]
-            db.save_bulk(newdocs)
+            #docs = filter_existing(newdocs)
+            DB.save_bulk(newdocs)
 
-            app_state = db.get('app_state')
+            app_state = DB.get('app_state')
             last_synced_row = int(app_state['last_synced_filemaker_row'])
 
             logger.debug(f"rowids: {rowids}")
@@ -266,7 +273,7 @@ def get_examination_of_sample(db, sample_path, missing_ok=False):
     mp_number, mp_year = mp_number_with_year.split('-')
 
     try:
-        examinations = list(db.query(f'examinations/mp_number?key=[{mp_year},{mp_number}]'))
+        examinations = db.query(f'examinations/mp_number?key=[{mp_year},{mp_number}]')
     except pycouchdb.exceptions.NotFound:
         logger.info(f'no examination of sample {sample_path} found')
         examinations = [None]
@@ -338,7 +345,7 @@ def poll_sequencer_output(db, config):
     '''
 
     # first, sync db with miseq output data
-    db_sequencer_runs = list(db.query('sequencer_runs/all'))
+    db_sequencer_runs = db.query('sequencer_runs/all')
     db_sequencer_paths = [str(r['value']['original_path']) for r in db_sequencer_runs]
 
     fs_miseq_output_path = Path(config['miseq_output_folder'])
@@ -498,8 +505,8 @@ def group_samples_by_panel(samples):
 def collect_new_runs(db, config):
     logger.info(f'started collecting new runs')
 
-    sequencer_runs = list(db.query('sequencer_runs/all'))
-    pipeline_runs = list(db.query('pipeline_runs/all'))
+    sequencer_runs = db.query('sequencer_runs/all')
+    pipeline_runs = db.query('pipeline_runs/all')
 
     sequencer_run_ids = set([str(Path(r['value']['original_path']).name) for r in sequencer_runs])
     pipeline_run_refs = set([str(Path(r['value']['sequencer_run_path']).name) for r in pipeline_runs])
@@ -537,7 +544,7 @@ def group_examinations_by_type(examinations):
 
 def collect_work(db):
     #new_runs = collect_new_runs(db,config)
-    new_examinations = list(db.query('examinations/new_examinations'))
+    new_examinations = db.query('examinations/new_examinations')
     new_examinations = [Examination(True, **(e['value'])) for e in new_examinations]
     groups = group_examinations_by_type(new_examinations)
     return groups

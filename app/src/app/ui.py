@@ -33,17 +33,17 @@ def get_db(app):
 def _get_pipeline_dashboard_html():
     db = get_db(current_app)
     progress = 0
-    pipeline_runs = list(db.query('pipeline_runs/all'))
+    pipeline_runs = db.query('pipeline_runs/all')
     p = [x['value'] for x in pipeline_runs]
 
     dn = datetime.now()
     for pr in p:
         pr['age'] = dn - datetime.fromisoformat(pr['created_time'])
     
-    sequencer_runs = list(db.query('sequencer_runs/all?limit10&descending=true'))
+    sequencer_runs = db.query('sequencer_runs/all?limit10&descending=true')
     r = [x['value'] for x in sequencer_runs]
 
-    e = list(db.query('examinations/examinations?limit=10&skip=10&descending=true'))
+    e = db.query('examinations/examinations?limit=10&skip=10&descending=true')
 
     def unserialize(x):
         d = x
