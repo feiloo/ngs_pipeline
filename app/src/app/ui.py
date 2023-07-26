@@ -56,6 +56,7 @@ def _get_pipeline_dashboard_html():
     autorun = settings['autorun_pipeline']
 
     pipeline_status = 'online'
+    number_examinations = db.query('examinations/count', as_list=True)[0]['value']
 
     return render_template('pipeline_dashboard.html', 
             examinations=examinations,
@@ -66,7 +67,8 @@ def _get_pipeline_dashboard_html():
             pipeline_schedule=pipeline_schedule,
             pipeline_runs=reversed(sorted(p, key=lambda x: datetime.fromisoformat(x['created_time']))),
             sequencer_runs=reversed(sorted(r, key=lambda x: datetime.fromisoformat(x['indexed_time']))),
-            panel_types=panel_types
+            panel_types=panel_types,
+            number_examinations=number_examinations
             )
 
 

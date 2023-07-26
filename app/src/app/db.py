@@ -201,6 +201,13 @@ examinations = basic_view('examinations', x, doctypes=['examination'])
 del x
 
 x = '''
+emit(doc._id, 1);
+'''
+
+examinations = basic_view('examinations', x, reducefn='_count', doctypes=['examination'])
+del x
+
+x = '''
 for(var i=0; i<doc.sequencer_runs.length; i++) {
   emit(doc.sequencer_runs[i]._id, doc._id);
 }
