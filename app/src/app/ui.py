@@ -83,14 +83,19 @@ def pipeline_start():
     result = start_pipeline.apply_async(args=[])
     return redirect('/pipeline_status')
 
-@admin.route("/pipeline_sync", methods=['POST'])
+@admin.route("/pipeline_sync_filemaker", methods=['POST'])
 def pipeline_sync():
-    current_app.logger.info('pipeline sync')
+    current_app.logger.info('pipeline sync filemaker')
     try:
         sync_couchdb_to_filemaker.apply_async(args=[])
     except Exception as e:
         logger.error(e)
 
+    return redirect('/pipeline_status')
+
+@admin.route("/pipeline_sync_sequencer", methods=['POST'])
+def pipeline_sync_sequencer():
+    current_app.logger.info('pipeline sync sequencer')
     try:
         sync_sequencer_output.apply_async(args=[])
     except Exception as e:
