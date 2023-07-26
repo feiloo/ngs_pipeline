@@ -5,10 +5,6 @@ from pydantic import BaseModel, Field
 from uuid import UUID
 import json
 
-# some runs are missing information because of device or network failure
-# for those only the fastq data is available
-runformat: ['miseq_0', 'only_fastq']
-
 DATA_MODEL_VERSION = '0.0.1'
 
 # based on the ordercodes of "NGS_Panel_Abdeckung_MolPath.docx"
@@ -31,13 +27,6 @@ PanelType = Literal[
         'NGS RNA Fusion Lunge', 
         'NGS PanCancer'
         ]
-
-primerMixes = {
-        'C1': {
-            'panel type': 'unknown',
-            'primers': [],
-            }
-        }
 
 # examination identifiers used in filemaker
 filemaker_examination_types = [
@@ -140,11 +129,6 @@ class SequencerInputSample(BaseDocument):
     final: bool = False
     repetition: bool = False
 
-class TrackingForm(BaseDocument):
-    document_type: str = 'tracking_form'
-    created_time: datetime
-    samples: List[SequencerInputSample]
-    
 
 class MolYearNumber(BaseModel):
     molnumber: int
@@ -190,66 +174,3 @@ document_types = {
         'examination': Examination, 
         'patient': Patient
         }
-
-#we need to create different taxonomical concepts for "workflow"
-# patho_workflow is the generalization of a ngs_panel 
-# that also includes manual steps like library preparation
-# this will be modeled by the according manual descriptions
-# versioned and available
-# in human readable form like html, pdf, word
-
-# sequence_analysis_workflow is the workflow that specifically
-# uses code in wdl format to automatically analyse mutations
-
-# model for a pathology examination
-
-# steps can be repeated, if for example samples are contaminated
-
-# step started and finished are usefull, because multiple steps 
-# could run concurrently
-'''
-database_stub = [
-        {
-        "_id": "1",
-        "case_ref": {
-            "molnr":2132, 
-            "year":2022, 
-            "examinationtype":"oncohs",
-            },
-        "workflow": {
-            "patho_workflow_uri": "uri",
-            "steps": [
-                {   "step_id": "patho_workflow_step_pipetting",
-                    "step_data": {
-                        "kit":"rna 340",
-                        "original_concentration (ng/ul)":116.0, 
-                        "diluted aqua (ul)":3.71, 
-                        "index1":"IL-N728",
-                        "index2":"IL-S502",
-                        },
-                    "step_started": "date",
-                    "step_finished": "date",
-                },
-                {
-                    "step_id": "patho_workflow_step_validate_pipetting"
-                    "step_started": "date",
-                    "step_finished": "date",
-                },
-                {   "step_id": "patho_workflow_step_pipetting_repeat",
-                    "step_data": {
-                        "original_concentration (ng/ul)":116.0, 
-                        "diluted aqua (ul)":3.71, 
-                        "repitition": 1,
-                        },
-                    "step_started": "date",
-                    "step_finished": "date",
-                },
-                {   "step_id": "sequence_analysis",
-                    "step_data": "..."
-                    "step_started": "date",
-                    "step_finished": "date",
-                }
-                ]
-            }
-        }]
-'''

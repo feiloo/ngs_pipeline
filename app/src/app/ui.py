@@ -4,9 +4,8 @@ from flask import Flask, render_template, request, redirect, g, current_app, Blu
 from werkzeug.utils import secure_filename
 
 from app.constants import *
-from app.model import panel_types, SequencerInputSample, TrackingForm, Examination, Patient
+from app.model import panel_types, SequencerInputSample, Examination, Patient
 
-from app.samplesheet import read_samplesheet
 from app.tasks import start_pipeline, sync_couchdb_to_filemaker, sync_sequencer_output, mq
 from app.db import DB
 
@@ -73,90 +72,6 @@ def raw_document_view(document_id):
     ds = str(doc)
     return render_template('raw_db_document.html', doc=doc,ds=ds)
 
-
-@admin.route("/tracking_form", methods=['get'])
-def tracking_form():
-    asample = {
-        'id':'2392/22',
-        'kit': 'RNA 652', 
-        'molnr': '2392/22',
-        'concentration': 2.3, 
-        'index1':'il-n726', 
-        'index2':'il-s503', 
-        'sample_volume':5, 
-        'sample_water':0
-        }
-
-    selected_cases = get_db(current_app).get('selected_cases')['cases']
-
-    dt = datetime.now()
-    #recs = get_new_records(dt.day-3, dt.month, dt.year)
-    fm_recs = recs['response']['data']
-
-    unselected_cases = list(filter(
-        lambda c: str(c['Mol_NR']) not in selected_cases,
-        [x['fieldData'] for x in fm_recs]
-    ))
-
-    samples = [
-        #SequencerInputSample(**asample).to_dict(),
-        SequencerInputSample(**{
-            'id':f'{molnr}',
-            'kit': 'RNA 652', 
-            'molnr': f'{molnr}',
-            'concentration': 2.3, 
-            'index1':'il-n726', 
-            'index2':'il-s503', 
-            'sample_volume':5, 
-            'sample_water': 0
-            })
-            for molnr in selected_cases
-        ]
-
-    f = {
-        'samples':samples,
-        'created_time': datetime.now()
-        }
-
-    tracking_form = TrackingForm(**f)
-
-    return render_template(
-        'tracking_form.html', 
-        version=PIPELINE_VERSION,
-        form=tracking_form.dict(),
-        panel_types=panel_types,
-        cases=unselected_cases
-        )
-
-@admin.route("/select_case_to_run", methods=['POST'])
-def select_case_to_run():
-    db = get_db(current_app)
-    case_molnr = request.args.get('case_molnr')
-
-    selected_cases = db.get('selected_cases')
-    selected_cases['cases'] = list(set(selected_cases['cases'] + [case_molnr]))
-    db.save(selected_cases)
-
-    return redirect('/tracking_form')
-
-@admin.route("/save_tracking_form", methods=['POST'])
-def save_tracking_form():
-    form_id = request.args.get('form_id')
-
-    if form_id is None:
-        pass
-
-    '''
-    try:
-        form = get_db(current_app).get(form_id)
-        #get_db(current_app).save(run)
-    except pycouchdb.exceptions.NotFound:
-        pass
-        #get_db(current_app).save(run)
-    '''
-
-    return redirect('/tracking_form')
-
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():
     current_app.logger.info('start pipeline')
@@ -166,28 +81,22 @@ def pipeline_start():
 @admin.route("/pipeline_sync", methods=['POST'])
 def pipeline_sync():
     current_app.logger.info('pipeline sync')
-    sync_couchdb_to_filemaker.apply_async(args=[])
-    sync_sequencer_output.apply_async(args=[])
+    try:
+        sync_couchdb_to_filemaker.apply_async(args=[])
+    except Exception as e:
+        logger.error(e)
+
+    try:
+        sync_sequencer_output.apply_async(args=[])
+    except Exception as e:
+        logger.error(e)
+
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_stop", methods=['POST'])
 def stop_pipeline():
     current_app.logger.info('stop pipeline')
     return redirect('/pipeline_status')
-
-@admin.route("/save_panel_type", methods=['POST'])
-def save_panel_type():
-    db = get_db(current_app)
-    sequencer_run_id = request.args.get('run_id')
-    run = db.get(sequencer_run_id)
-    if run['panel_type'] != 'invalid':
-        logger.warning('error panel_type is already set')
-    else:
-        run['panel_type'] = request.form['panel_type']
-        db(current_app).save(run)
-
-    return redirect('/pipeline_status')
-
 
 @admin.route("/pipeline_status", methods=['GET'])
 def pipeline_status():
