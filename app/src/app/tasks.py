@@ -45,8 +45,8 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @mq.task
 def sync_couchdb_to_filemaker():
-    filemaker = Filemaker.from_config(CONFIG)
-    retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5)
+    #filemaker = Filemaker.from_config(CONFIG)
+    #retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5)
     create_examinations()
     aggregate_patients()
 

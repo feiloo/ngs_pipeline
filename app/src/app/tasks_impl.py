@@ -155,7 +155,6 @@ def create_examinations():
         d = filemaker_record
 
         exam = Examination(
-                map_id=False,
                 id=str(uuid4()),
                 examinationtype=d['Untersuchung'], 
                 started_date=parse_date(d['Zeitstempel']),
@@ -165,7 +164,7 @@ def create_examinations():
                 #last_sync_time=datetime.now(),
                 annotations={}
                 )
-        db.save(exam.to_dict())
+        db.save(exam)
 
         if i % 1000==0:
             logger.info(f'created {i} examinations and continuing')

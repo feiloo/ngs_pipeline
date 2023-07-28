@@ -1,6 +1,7 @@
 from textwrap import indent
 import requests
 import pycouchdb as couch
+import json
 
 from app.model import *
 
@@ -289,6 +290,8 @@ def map_id(doc):
     if '_rev' in doc:
         rev = doc.pop('_rev')
         doc['rev'] = rev
+    else:
+        doc['rev'] = None
 
     return doc
 
@@ -297,7 +300,8 @@ def unmap_id(doc):
     doc['_id'] = id
     if 'rev' in doc:
         rev = doc.pop('rev')
-        doc['_rev'] = rev
+        if rev is not None:
+            doc['_rev'] = rev
 
     return doc
 
@@ -347,7 +351,9 @@ class Db:
 
     def _obj_to_d(self, obj):
         if isinstance(obj, BaseDocument):
-            return unmap_id(obj.model_dump())
+            # use json loads and model_dump_json instead of model_dump
+            # because fields like date or path will not be stringified otherwise
+            return unmap_id(json.loads(obj.model_dump_json()))
         else:
             return obj
 
