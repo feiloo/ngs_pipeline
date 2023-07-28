@@ -2,6 +2,8 @@ from textwrap import indent
 import requests
 import pycouchdb as couch
 
+from app.model import *
+
 def ind(x):
     ''' hardcoded indent for convenience '''
     return indent(x, "  ")
@@ -281,6 +283,24 @@ def _get_db_url(config):
     url = f"http://{user}:{psw}@{host}:{port}"
     return url
 
+def map_id(doc):
+    id = doc.pop('_id')
+    doc['id'] = id
+    if '_rev' in doc:
+        rev = doc.pop('_rev')
+        doc['rev'] = rev
+
+    return doc
+
+def unmap_id(doc):
+    id = doc.pop('id')
+    doc['_id'] = id
+    if 'rev' in doc:
+        rev = doc.pop('rev')
+        doc['_rev'] = rev
+
+    return doc
+
 
 class Db:
     '''
@@ -305,17 +325,43 @@ class Db:
     def _check_initialized(self):
         return self.name in self.server
 
+    def _wrap(self, doc):
+        d = map_id(doc)
+        doctype = d['document_type']
+        if doctype in document_class_map:
+            cl = document_class_map[doctype]
+            return cl(**d)
+        else:
+            return d
+
+    def _wrap_query(self, docs):
+        if not isinstance(docs['value'], list):
+            return docs
+        return [self._wrap(d) for d in docs['value']]
+
     def get(self, *args, **kwargs):
         self._check_con()
+        if 'wrapper' not in kwargs:
+            kwargs['wrapper'] = self._wrap
         return self.couchdb.get(*args,**kwargs)
+
+    def _obj_to_d(self, obj):
+        if isinstance(obj, BaseDocument):
+            return unmap_id(obj.model_dump())
+        else:
+            return obj
 
     def save(self, *args, **kwargs):
         self._check_con()
-        return self.couchdb.save(*args,**kwargs)
+        nargs = list(args)
+        nargs[0] = self._obj_to_d(args[0])
+        return self.couchdb.save(*nargs,**kwargs)
 
     def save_bulk(self, *args, **kwargs):
         self._check_con()
-        return self.couchdb.save_bulk(*args,**kwargs)
+        nargs = list(args)
+        nargs[0] = [self._obj_to_d(o) for o in args[0]]
+        return self.couchdb.save_bulk(*nargs,**kwargs)
 
     def delete(self, *args, **kwargs):
         self._check_con()
@@ -325,6 +371,8 @@ class Db:
         self._check_con()
         if 'as_list' not in kwargs.keys():
             kwargs['as_list'] = True
+        if 'wrapper' not in kwargs:
+            kwargs['wrapper'] = self._wrap_query
         return self.couchdb.query(*args,**kwargs)
     
     #@staticmethod

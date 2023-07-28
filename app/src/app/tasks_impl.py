@@ -12,7 +12,7 @@ from celery.utils.log import get_task_logger
 from more_itertools import flatten
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
-from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types, document_types, BaseDocument
+from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types, document_class_map, BaseDocument
 from app.constants import filemaker_examination_types_workflow_mapping, workflow_paths
 from app.tasks_utils import Timeout, Schedule
 from app.workflow_backends import workflow_backend_execute
@@ -28,7 +28,7 @@ db = DB
 
 def build_obj(obj: dict) -> BaseDocument:
     ty = obj['document_type']
-    data_obj = document_types[ty](map_id=True, **obj)
+    data_obj = document_class_map[ty](map_id=True, **obj)
     return data_obj
 
 
@@ -128,6 +128,7 @@ def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5
     return batches_done
 
 
+
 def create_examinations():
     '''
     scan through all filemaker records and create an exam document
@@ -173,7 +174,7 @@ def create_examinations():
 def get_names(examination):
     filemaker_record = examination.filemaker_record
     names = {}
-    names['fullname'] = f"{filemaker_record['Vorname']}, {filemaker_record['Name']}"
+    names['fullname'] = f"{filemaker_record['Vorname']} {filemaker_record['Name']}"
     names['firstname'] = filemaker_record['Vorname']
     names['lastname'] = filemaker_record['Name']
     return names
@@ -375,7 +376,7 @@ def poll_sequencer_output():
         sequencer_run = SequencerRun(
                 map_id=False,
                 id=str(uuid4()),
-                original_path=Path(run_name),
+                original_path=str(run_name),
                 name_dirty=str(dirty),
                 parsed=parsed,
                 state='successful',
@@ -400,7 +401,7 @@ def poll_sequencer_output():
         new_exams = link_examinations_to_sequencer_run(examinations, sequencer_run.id)
 
         # this validates the fields
-        db.save_bulk([sequencer_run.to_dict()] + new_exams)
+        db.save_bulk([sequencer_run] + new_exams)
         sequencer_runs.append(sequencer_run)
 
     return sequencer_runs

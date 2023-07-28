@@ -46,37 +46,12 @@ filemaker_examination_types = [
 
 
 class BaseDocument(BaseModel):
-    id: str
+    id: str 
     rev: Optional[str] = None
     data_model_version: str = DATA_MODEL_VERSION
     document_type: str
     dirty: bool = True
     ignore_dirty: bool = False
-
-    def __init__(self, map_id: bool, *args, **kwargs):
-        d = kwargs
-        if map_id==True:
-            if '_id' in d:
-                d['id'] = d.pop('_id')
-            if '_rev' in d:
-                d['rev'] = d.pop('_rev')
-
-        super().__init__(*args, **d)
-
-    def to_dict(self):
-        # convert to serializable dict
-        d = json.loads(self.json())
-        d.pop('id')
-        d.pop('rev')
-        if self.id is not None:
-            d['_id'] = self.id
-        if self.rev is not None:
-            d['_rev'] = self.rev
-        return d
-
-    def from_dict(self, d):
-        m = type(self)(True,**d)
-        return m
 
     class Config:
         validate_assignment = True
@@ -168,7 +143,7 @@ class Clinician(Person):
 class Result(BaseModel):
     description: str
 
-document_types = {
+document_class_map = {
         'sequencer_run': SequencerRun, 
         'pipeline_run': PipelineRun, 
         'examination': Examination, 
