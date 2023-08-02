@@ -349,8 +349,6 @@ class QueryResult:
         return [self._wrap(x['value']) for x in self._rows]
 
     def docs(self):
-        if 'doc' not in x.keys():
-            raise RuntimeError('doc field not in query result, did you call with include_docs=True?')
         return [self._wrap(x['doc']) for x in self.rows]
 
     @property
@@ -393,17 +391,19 @@ class Db:
 
     def _obj_to_d(self, obj):
         # forbid directly writing _id and _rev to prevent bugs where it isnt properly mapped
-        if '_id' in nargs.keys():
-            raise RuntimeError('explicitely setting _id is not allowed, use id instead')
-        if '_rev' in nargs.keys():
-            raise RuntimeError('explicitely setting _rev is not allowed, use rev instead')
 
         if isinstance(obj, BaseDocument):
             # use json loads and model_dump_json instead of model_dump
             # because fields like date or path will not be stringified otherwise
             return unmap_id(json.loads(obj.model_dump_json()))
-        else:
+        elif isinstance(obj, dict):
+            if '_id' in obj.keys():
+                raise RuntimeError('explicitely setting _id is not allowed, use id instead')
+            if '_rev' in obj.keys():
+                raise RuntimeError('explicitely setting _rev is not allowed, use rev instead')
             return unmap_id(obj)
+        else:
+            raise RuntimeError('unsupported object: {obj} of type {type(obj)}')
 
     def save(self, *args, **kwargs):
         self._check_con()
