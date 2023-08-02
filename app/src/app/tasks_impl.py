@@ -200,7 +200,6 @@ def create_patient_aggregate(examinations: [Examination]) -> Patient :
     eids = [e.id for e in examinations]
 
     patient = Patient(
-        map_id=False,
         id=str(uuid4()),
         names=names,
         birthdate=birthdate, 
@@ -218,16 +217,22 @@ def aggregate_patients():
     link the patient and exam documents by their id's
     '''
     logger.info('aggregating patients')
-    it = db.query('patients/patient_aggregation?include_docs=true')
+    it = db.query('patients/patient_aggregation?include_docs=true', fields=['doc'])
+    logger.info(it[:10])
+    return 
+
     logger.info('grouping examinations for patient aggregation')
 
     for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'][0:-1])):
         g = list(group)
 
         patient_entries = list(filter(
-            lambda d: d['doc']['document_type'] == 'patient',
+            lambda o: o.document_type == 'patient',
             g
             ))
+
+        logger.info(patient_entries[:10])
+        '''
         examination_docs = list(filter(
             lambda d: d['doc']['document_type'] == 'examination',
             g
@@ -262,6 +267,7 @@ def aggregate_patients():
 
         if i % 100 == 0:
             logger.info(f'aggregated {i} patients, continuing')
+        '''
 
 
 def get_mp_number_from_path(p):

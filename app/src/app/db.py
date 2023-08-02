@@ -305,6 +305,29 @@ def unmap_id(doc):
 
     return doc
 
+class QueryResult:
+    ''' class to allow easier manipulation of couchdb view results '''
+    def __init__(self, rows):
+        self._rows = rows
+
+    def ids(self):
+        return [x['id'] for x in self._rows]
+
+    def keys(self):
+        return [x['key'] for x in self._rows]
+
+    def values(self):
+        return [x['value'] for x in self._rows]
+
+    def docs(self):
+        if 'doc' not in x.keys():
+            raise RuntimeError('doc field not in query result, did you call with include_docs=True?')
+        return [x['doc'] for x in self.rows]
+
+    @property
+    def rows(self):
+        return self._rows
+
 
 class Db:
     '''
@@ -331,23 +354,20 @@ class Db:
 
     def _wrap(self, doc):
         d = map_id(doc)
-        doctype = d['document_type']
-        if doctype in document_class_map:
-            cl = document_class_map[doctype]
-            return cl(**d)
-        else:
+        if 'document_type' not in d:
             return d
 
-    def _wrap_query(self, docs):
-        if not isinstance(docs['value'], list):
-            return docs
-        return [self._wrap(d) for d in docs['value']]
+        doctype = d['document_type']
+        if doctype not in document_class_map.keys():
+            return d
+
+        cl = document_class_map[doctype]
+        return cl(**d)
+
 
     def get(self, *args, **kwargs):
         self._check_con()
-        if 'wrapper' not in kwargs:
-            kwargs['wrapper'] = self._wrap
-        return self.couchdb.get(*args,**kwargs)
+        return self._wrap(self.couchdb.get(*args,**kwargs))
 
     def _obj_to_d(self, obj):
         if isinstance(obj, BaseDocument):
@@ -373,14 +393,15 @@ class Db:
         self._check_con()
         return self.couchdb.delete(*args,**kwargs)
 
-    def query(self, *args, **kwargs):
+    def query(self, *args, fields=['value'], **kwargs):
         self._check_con()
         if 'as_list' not in kwargs.keys():
             kwargs['as_list'] = True
-        if 'wrapper' not in kwargs:
-            kwargs['wrapper'] = self._wrap_query
-        return self.couchdb.query(*args,**kwargs)
-    
+
+        res = self.couchdb.query(*args,**kwargs)
+        return QueryResult(res)
+
+
     #@staticmethod
     def init_db(self, config):
         server = couch.Server(_get_db_url(config))

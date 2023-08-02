@@ -22,30 +22,26 @@ db = DB
 
 def _get_pipeline_dashboard_html():
     progress = 0
-    pipeline_runs = db.query('pipeline_runs/all')
-    p = [x['value'] for x in pipeline_runs]
+    pipeline_runs = db.query('pipeline_runs/all').values()
 
     dn = datetime.now()
-    for pr in p:
+    for pr in pipeline_runs:
         pr['age'] = dn - datetime.fromisoformat(pr['created_time'])
     
-    sequencer_runs = db.query('sequencer_runs/all?limit10&descending=true')
-    r = [x['value'] for x in sequencer_runs]
+    sequencer_runs = db.query('sequencer_runs/all?limit10&descending=true').values()
 
-    e = db.query('examinations/examinations?limit=10&skip=10&descending=true')
+    examinations = db.query('examinations/examinations?limit=10&skip=10&descending=true').values()
 
-    def unserialize(x):
-        d = x
-        d['filemaker_record'] = x['filemaker_record']
-        return d
-
-    examinations = [unserialize(x['value']) for x in e]
     settings = db.get('app_settings')
     pipeline_schedule = settings['schedule']
     autorun = settings['autorun_pipeline']
 
     pipeline_status = 'online'
-    number_examinations = db.query('examinations/count', as_list=True)[0]['value']
+    number_examinations = db.query('examinations/count', as_list=True).rows[0]
+
+    def sort_by_date(field, rows):
+        return reversed(sorted(rows, 
+            key=lambda x: datetime.fromisoformat(x[field])))
 
     return render_template('pipeline_dashboard.html', 
             examinations=examinations,
@@ -54,8 +50,8 @@ def _get_pipeline_dashboard_html():
             pipeline_status=f'{pipeline_status}',
             pipeline_autorun=autorun,
             pipeline_schedule=pipeline_schedule,
-            pipeline_runs=reversed(sorted(p, key=lambda x: datetime.fromisoformat(x['created_time']))),
-            sequencer_runs=reversed(sorted(r, key=lambda x: datetime.fromisoformat(x['indexed_time']))),
+            pipeline_runs=sort_by_date('created_time', pipeline_runs),
+            sequencer_runs=sort_by_date('indexed_time', sequencer_runs),
             panel_types=panel_types,
             number_examinations=number_examinations
             )
