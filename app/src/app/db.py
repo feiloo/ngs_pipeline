@@ -91,6 +91,7 @@ def basic_view(name, map_body, reducefn=None, doctypes=None, deleted=False):
 
 
 def setup_views(app_db):
+
     if 'app_state' not in app_db:
         app_state = {
                 '_id': 'app_state',
@@ -143,7 +144,7 @@ def setup_views(app_db):
           emit([doc._id,0], 0);
         }
         else if(doc.document_type == 'examination'){
-          emit([doc.filemaker_record._id,1], 1);
+          emit([doc.filemaker_record.id,1], 1);
         }
       }
     }
@@ -391,6 +392,12 @@ class Db:
         return [self.get(i) for i in ids]
 
     def _obj_to_d(self, obj):
+        # forbid directly writing _id and _rev to prevent bugs where it isnt properly mapped
+        if '_id' in nargs.keys():
+            raise RuntimeError('explicitely setting _id is not allowed, use id instead')
+        if '_rev' in nargs.keys():
+            raise RuntimeError('explicitely setting _rev is not allowed, use rev instead')
+
         if isinstance(obj, BaseDocument):
             # use json loads and model_dump_json instead of model_dump
             # because fields like date or path will not be stringified otherwise
@@ -432,7 +439,7 @@ class Db:
 
         self.views = ddocs
         for doc in ddocs:
-            self.save(doc)
+            self.couchdb.save(doc)
 
 
     def view(self, viewname, value=True):
