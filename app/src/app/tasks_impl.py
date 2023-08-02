@@ -20,7 +20,8 @@ from app.workflow_backends import workflow_backend_execute
 from app.db import DB
 from app.config import CONFIG
 
-import pycouchdb
+import json
+from hashlib import sha256
 
 logger = get_task_logger(__name__)
 
@@ -31,8 +32,15 @@ def build_obj(obj: dict) -> BaseDocument:
     data_obj = document_class_map[ty](map_id=True, **obj)
     return data_obj
 
+def get_filemaker_id(filemaker_record):
+    bi = str(json.dumps(filemaker_record)).encode('utf-8')
+    dig = fid = sha256(bi).hexdigest()
+    return dig
+
 def processor(record: dict) -> dict:
     d = record['fieldData']
+    fid = get_filemaker_id(record)
+    d['id'] = f"filemaker_record_row_{fid}"
     d['document_type'] = 'filemaker_record'
     return d
 
@@ -54,8 +62,15 @@ def retrieve_new_filemaker_data_full(filemaker, processor, backoff_time=5):
             sleep(backoff_time)
             response = filemaker.get_all_records(offset=batches_done*1000+1, limit=1000)
             records = response['data']
-            res = list(map(processor, records))
-            db.save_bulk(res)
+
+            # only add new filemaker records, based on their id
+            new_records = list(filter(
+                lambda r: get_filemaker_id(r) not in db, 
+                records
+                ))
+
+            newdocs = list(map(processor, records))
+            db.save_bulk(newdocs)
             logger.debug(f"saved {batches_done} batches")
 
             if timeout.reached():
@@ -79,38 +94,32 @@ def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5
 
     app_state = DB.get('app_state')
     last_synced_row = int(app_state['last_synced_filemaker_row'])
-    # annoyingly, filemaker rows start with one, so we need to set last_synced row to 0 initially
-    # and after, it will match the highest rowid, but the number ow rows will be last_synced_row-1
-    if last_synced_row == -1:
-        logger.info("starting first incremental sync")
-        last_synced_row = 0
 
     for batches_done in count():
         try:
             # backoff for a few seconds
             sleep(backoff_time)
-            offset = batches_done*1000 + last_synced_row+1
+
+            app_state = DB.get('app_state')
+            last_synced_row = int(app_state['last_synced_filemaker_row'])
+            offset = last_synced_row + 1 + batches_done*1000
             response = filemaker.get_all_records(offset=offset, limit=1000)
             records = list(response['data'])
             logger.debug(f"retrieved {len(records)} filemaker_rows")
             logger.debug(f"last_synced_row_was {last_synced_row} and record id was {records[0]['recordId']}")
 
+            # only add new filemaker records, based on their id
+            new_records = list(filter(
+                lambda r: get_filemaker_id(r) not in db, 
+                records
+                ))
 
-            if last_synced_row >= int(records[0]['recordId']):
-                logger.error(f"record id doesnt match last_synced_row with record {records}")
-                raise RuntimeError('record id doesnt match last_synced_row')
+            num_dupes = len(records) - len(new_records) 
+            logger.info(f"not saving {num_dupes}")
 
-            #rowids = list(map(lambda x: int(x['recordId']), records))
-            #app_state['last_synced_filemaker_row'] = max(rowids)
-            app_state['last_synced_filemaker_row'] = offset + len(records)
-            newdocs = list(map(processor, records)) + [app_state]
-            #docs = filter_existing(newdocs)
+            app_state['last_synced_filemaker_row'] = offset + len(new_records)
+            newdocs = list(map(processor, new_records)) + [app_state]
             DB.save_bulk(newdocs)
-
-            app_state = DB.get('app_state')
-            last_synced_row = int(app_state['last_synced_filemaker_row'])
-
-            logger.debug(f"rowids: {rowids}")
 
             if timeout.reached():
                 raise RuntimeError('database sync timed out, it took too long in total')
@@ -211,7 +220,7 @@ def aggregate_patients():
     link the patient and exam documents by their id's
     '''
     logger.info('aggregating patients')
-    it = db.query('patients/patient_aggregation?include_docs=true', fields=['doc'])
+    it = db.query('patients/patient_aggregation?include_docs=true').to_wrapped().docs()
     logger.info(it[:10])
     return 
 
@@ -275,7 +284,7 @@ def get_examination_of_sample(sample_path, missing_ok=False):
 
     try:
         examinations = db.query(f'examinations/mp_number?key=[{mp_year},{mp_number}]')
-    except pycouchdb.exceptions.NotFound:
+    except db.NotFound:
         logger.info(f'no examination of sample {sample_path} found')
         examinations = [None]
 
@@ -501,31 +510,6 @@ def group_samples_by_panel(samples):
     return start_panel_workflow_tasks
 
 
-def collect_new_runs():
-    logger.info(f'started collecting new runs')
-
-    sequencer_runs = db.query('sequencer_runs/all')
-    pipeline_runs = db.query('pipeline_runs/all')
-
-    sequencer_run_ids = set([str(Path(r['value']['original_path']).name) for r in sequencer_runs])
-    pipeline_run_refs = set([str(Path(r['value']['sequencer_run_path']).name) for r in pipeline_runs])
-    new_run_ids = sequencer_run_ids - pipeline_run_refs
-
-    # get the new_run docs that match the new_run_ids
-    new_runs = list(filter(
-        lambda x: str(Path(x['value']['original_path']).name) in new_run_ids, 
-        sequencer_runs)
-        )
-
-    if len(new_runs) == 0:
-        logger.info('no new runs')
-        return
-    else:
-        logger.info(f'collected {len(new_runs)} new runs')
-
-    return new_runs
-
-
 def group_examinations_by_type(examinations):
     groups = {}
     for e in examinations:
@@ -542,7 +526,6 @@ def group_examinations_by_type(examinations):
 
 
 def collect_work():
-    #new_runs = collect_new_runs(db,config)
     new_examinations = db.query('examinations/new_examinations').to_wrapped().values()
     groups = group_examinations_by_type(new_examinations)
     return groups
