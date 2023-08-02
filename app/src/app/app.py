@@ -39,18 +39,19 @@ class StandaloneApplication(BaseApplication):
 def main(ctx, dev, config):
     ctx.ensure_object(dict)
     CONFIG.set(dev=dev, path=config)
-    DB.from_config(CONFIG)
 
 
 @main.command()
 @click.pass_context
 def init(ctx):
     DB.init_db(CONFIG)
+    DB.from_config(CONFIG)
 
     
 @main.command()
 @click.pass_context
 def run(ctx):
+    DB.from_config(CONFIG)
     mq.conf.update(**CONFIG.celery_config)
     app = create_app(CONFIG.dict())
 
@@ -67,6 +68,7 @@ def run(ctx):
 @main.command()
 @click.pass_context
 def worker(ctx):
+    DB.from_config(CONFIG)
     mq.conf.update(**CONFIG.celery_config)
     worker = mq.Worker(
             include=['app.app'],
@@ -78,6 +80,7 @@ def worker(ctx):
 @main.command()
 @click.pass_context
 def beat(ctx):
+    DB.from_config(CONFIG)
     mq.conf.update(**CONFIG.celery_config)
     b = Beat(app=mq,
             schedule='/tmp/ngs_pipeline_beat_schedule',
