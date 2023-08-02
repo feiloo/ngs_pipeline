@@ -94,7 +94,7 @@ def setup_views(app_db):
     if 'app_state' not in app_db:
         app_state = {
                 '_id': 'app_state',
-                'last_synced_filemaker_row':-1,
+                'last_synced_filemaker_row':0,
                 'sync_running': False
                 }
 
@@ -380,7 +380,8 @@ class Db:
     def _check_initialized(self):
         return self.name in self.server
 
-
+    def __contains__(self, doc_id):
+        return doc_id in self.couchdb
 
     def get(self, *args, **kwargs):
         self._check_con()
@@ -395,7 +396,7 @@ class Db:
             # because fields like date or path will not be stringified otherwise
             return unmap_id(json.loads(obj.model_dump_json()))
         else:
-            return obj
+            return unmap_id(obj)
 
     def save(self, *args, **kwargs):
         self._check_con()
