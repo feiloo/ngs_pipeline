@@ -305,10 +305,35 @@ def unmap_id(doc):
 
     return doc
 
+
+
+def _wrap(doc):
+    d = map_id(doc)
+    if 'document_type' not in d:
+        return d
+
+    doctype = d['document_type']
+    if doctype not in document_class_map.keys():
+        return d
+
+    cl = document_class_map[doctype]
+    return cl(**d)
+
+
 class QueryResult:
     ''' class to allow easier manipulation of couchdb view results '''
-    def __init__(self, rows):
+    def __init__(self, rows, should_wrap=False):
         self._rows = rows
+        self._should_wrap = should_wrap
+
+    def to_wrapped(self):
+        return QueryResult(self.rows, should_wrap=True)
+
+    def _wrap(self, x):
+        if self._should_wrap:
+            return _wrap(x)
+        else:
+            return x
 
     def ids(self):
         return [x['id'] for x in self._rows]
@@ -317,12 +342,12 @@ class QueryResult:
         return [x['key'] for x in self._rows]
 
     def values(self):
-        return [x['value'] for x in self._rows]
+        return [self._wrap(x['value']) for x in self._rows]
 
     def docs(self):
         if 'doc' not in x.keys():
             raise RuntimeError('doc field not in query result, did you call with include_docs=True?')
-        return [x['doc'] for x in self.rows]
+        return [self._wrap(x['doc']) for x in self.rows]
 
     @property
     def rows(self):
@@ -352,22 +377,11 @@ class Db:
     def _check_initialized(self):
         return self.name in self.server
 
-    def _wrap(self, doc):
-        d = map_id(doc)
-        if 'document_type' not in d:
-            return d
-
-        doctype = d['document_type']
-        if doctype not in document_class_map.keys():
-            return d
-
-        cl = document_class_map[doctype]
-        return cl(**d)
 
 
     def get(self, *args, **kwargs):
         self._check_con()
-        return self._wrap(self.couchdb.get(*args,**kwargs))
+        return _wrap(self.couchdb.get(*args,**kwargs))
 
     def _obj_to_d(self, obj):
         if isinstance(obj, BaseDocument):

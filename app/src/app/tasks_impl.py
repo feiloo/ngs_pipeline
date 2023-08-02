@@ -31,12 +31,6 @@ def build_obj(obj: dict) -> BaseDocument:
     data_obj = document_class_map[ty](map_id=True, **obj)
     return data_obj
 
-
-def query(query) -> List[BaseDocument]:
-    l = db.query(query)
-    return [build_obj(x['value']) for x in l]
-
-
 def processor(record: dict) -> dict:
     d = record['fieldData']
     d['document_type'] = 'filemaker_record'
@@ -142,7 +136,7 @@ def create_examinations():
 
     new_records = []
     duplicate_examinations = []
-    for p in db.query('filemaker/all?group_level=1&'):
+    for p in db.query('filemaker/all?group_level=1&').rows:
         if p['value'] < 1:
             new_records.append(p['key'][0])
         elif p['value'] > 1:
@@ -352,8 +346,9 @@ def poll_sequencer_output():
     '''
 
     # first, sync db with miseq output data
-    db_sequencer_runs = db.query('sequencer_runs/all')
-    db_sequencer_paths = [str(r['value']['original_path']) for r in db_sequencer_runs]
+    db_sequencer_runs = db.query('sequencer_runs/all').to_wrapped().values()
+    #db_sequencer_paths = [str(r['value']['original_path']) for r in db_sequencer_runs]
+    db_sequencer_paths = [str(r.original_path) for r in db_sequencer_runs]
 
     fs_miseq_output_path = Path(CONFIG['miseq_output_folder'])
     fs_miseq_output_runs = [fs_miseq_output_path / x for x in fs_miseq_output_path.iterdir()]
@@ -548,8 +543,7 @@ def group_examinations_by_type(examinations):
 
 def collect_work():
     #new_runs = collect_new_runs(db,config)
-    new_examinations = db.query('examinations/new_examinations')
-    new_examinations = [Examination(True, **(e['value'])) for e in new_examinations]
+    new_examinations = db.query('examinations/new_examinations').to_wrapped().values()
     groups = group_examinations_by_type(new_examinations)
     return groups
 
