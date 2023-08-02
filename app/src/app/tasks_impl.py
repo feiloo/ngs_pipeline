@@ -131,6 +131,18 @@ def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5
     return batches_done
 
 
+def exam_from_filemaker_record(filemaker_record):
+    exam = Examination(
+            id=str(uuid4()),
+            examinationtype=filemaker_record['Untersuchung'], 
+            started_date=parse_date(filemaker_record['Zeitstempel']),
+            sequencer_runs=[],
+            pipeline_runs=[],
+            filemaker_record=filemaker_record,
+            #last_sync_time=datetime.now(),
+            annotations={}
+            )
+    return exam
 
 def create_examinations():
     '''
@@ -146,27 +158,18 @@ def create_examinations():
     new_records = []
     duplicate_examinations = []
     for p in db.query('filemaker/all?group_level=1&').rows:
-        if p['value'] < 1:
+        if p['value'] == 1:
+            continue
+        elif p['value'] < 1:
             new_records.append(p['key'][0])
-        elif p['value'] > 1:
+        else:
             duplicate_examinations.append(p['key'][0])
 
     logger.info('finished grouping filemaker records, starting creating examinations')
 
     for i, p in enumerate(new_records):
         filemaker_record = db.get(p)
-        d = filemaker_record
-
-        exam = Examination(
-                id=str(uuid4()),
-                examinationtype=d['Untersuchung'], 
-                started_date=parse_date(d['Zeitstempel']),
-                sequencer_runs=[],
-                pipeline_runs=[],
-                filemaker_record=d,
-                #last_sync_time=datetime.now(),
-                annotations={}
-                )
+        exam = exam_from_filemaker_record(filemaker_record)
         db.save(exam)
 
         if i % 1000==0:
@@ -182,7 +185,7 @@ def get_names(examination):
     return names
 
 
-def create_patient_aggregate(examinations: [Examination]) -> Patient :
+def patient_from_exams(examinations: [Examination]) -> Patient :
     # use the most recent names as the patients names
     sorted_exams = sorted(examinations, key=lambda e: e.started_date)
     names = list(map(get_names, sorted_exams))[-1]
@@ -220,33 +223,33 @@ def aggregate_patients():
     link the patient and exam documents by their id's
     '''
     logger.info('aggregating patients')
-    it = db.query('patients/patient_aggregation?include_docs=true').to_wrapped().docs()
-    logger.info(it[:10])
-    return 
-
+    result = db.query('patients/patient_aggregation?include_docs=true').to_wrapped()
+    kvs = zip(result.keys(), result.docs())
     logger.info('grouping examinations for patient aggregation')
 
-    for i, (key, group) in enumerate(groupby(it, key=lambda d: d['key'][0:-1])):
-        g = list(group)
+    # group based on the first few parts of the key, as specified in the view
+    def groupfn(kv):
+        k, _ = kv
+        return k[0:-1]
 
-        patient_entries = list(filter(
+    for i, (key, group) in enumerate(groupby(kvs, key=groupfn)):
+        grouped_docs = [x[1] for x in group]
+
+        patient_objs = list(filter(
             lambda o: o.document_type == 'patient',
-            g
+            grouped_docs
             ))
 
-        logger.info(patient_entries[:10])
-        '''
-        examination_docs = list(filter(
-            lambda d: d['doc']['document_type'] == 'examination',
-            g
-            ))
-        examinations = list(map(
-            lambda e: Examination(True, **e['doc']), 
-            examination_docs
+        examinations = list(filter(
+            lambda d: d.document_type == 'examination',
+            grouped_docs
             ))
 
         examination_ids = [e.id for e in examinations]
-        patient_objs = [Patient(map_id=True, **(e['doc'])) for e in patient_entries]
+
+        logger.debug(patient_objs)
+        logger.debug(examinations)
+        logger.debug(examination_ids)
 
         if len(patient_objs) > 1:
             raise RuntimeError(f'too many patient objects for examination group: {g}')
@@ -255,22 +258,24 @@ def aggregate_patients():
             pd = patient_objs[0]
 
             if pd.examinations != examination_ids:
-                new_patient = pd.to_dict()
-                pd['examinations'] = examination_ids
-                p = Patient(True, pd)
-                db.save(Patient.to_dict())
+                updated_patient = pd.model_dump()
+                updated_patient['examinations'] = examination_ids
+                p = Patient(**updated_patient)
+                db.save(p)
         else:
             # no patient exists for the examinations
             try:
-                patient = create_patient_aggregate(examinations)
-                db.save(patient.to_dict())
+                patient = patient_from_exams(examinations)
+                db.save(patient)
+            except ValueError as e:
+                logger.error(e)
             except Exception as e:
-                continue
-
+                logger.error(e)
+                raise e
 
         if i % 100 == 0:
             logger.info(f'aggregated {i} patients, continuing')
-        '''
+
 
 
 def get_mp_number_from_path(p):
