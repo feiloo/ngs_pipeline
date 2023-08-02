@@ -37,7 +37,13 @@ def _get_pipeline_dashboard_html():
     autorun = settings['autorun_pipeline']
 
     pipeline_status = 'online'
-    number_examinations = db.query('examinations/count', as_list=True).rows[0]
+
+    number_examinations_res = db.query('examinations/examinations_count', as_list=True)
+    if len(number_examinations_res.rows) != 1:
+        current_app.logger.error('error fetching examinations_count, no query result rows, check if there are any examinations documents')
+        number_examinations = 'unknown'
+    else:
+        number_examinations = number_examinations.rows[0]
 
     def sort_by_date(field, rows):
         return reversed(sorted(rows, 

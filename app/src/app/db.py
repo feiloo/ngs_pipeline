@@ -5,6 +5,8 @@ import json
 
 from app.model import *
 
+NotFound = couch.exceptions.NotFound
+
 def ind(x):
     ''' hardcoded indent for convenience '''
     return indent(x, "  ")
@@ -207,7 +209,7 @@ x = '''
 emit(doc._id, 1);
 '''
 
-examinations = basic_view('examinations', x, reducefn='_count', doctypes=['examination'])
+examinations_count = basic_view('examinations_count', x, reducefn='_count', doctypes=['examination'])
 del x
 
 x = '''
@@ -248,9 +250,10 @@ examinations_mp_number = basic_view('mp_number', x, doctypes=['examination'])
 del x
 
 examinations_ddoc = DesignDoc('examinations', [
-    new_examinations, 
     examinations,
-    examinations_mp_number
+    examinations_count,
+    examinations_mp_number,
+    new_examinations, 
     ]).to_dict()
 ddocs.append(examinations_ddoc)
 
@@ -382,6 +385,9 @@ class Db:
     def get(self, *args, **kwargs):
         self._check_con()
         return _wrap(self.couchdb.get(*args,**kwargs))
+
+    def bulk_get(self, ids, *args, **kwargs):
+        return [self.get(i) for i in ids]
 
     def _obj_to_d(self, obj):
         if isinstance(obj, BaseDocument):
