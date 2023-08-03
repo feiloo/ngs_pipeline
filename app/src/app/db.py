@@ -222,7 +222,7 @@ examinations_sequencer_runs = basic_view('sequencer_runs', x, doctypes=['examina
 del x
 
 x = '''
-if(doc.pipeline_runs.length === 0 && doc.sequencer_runs.length >= 0){
+if(doc.pipeline_runs.length === 0 && doc.sequencer_runs.length > 0){
   emit(doc._id, doc);
 }
 '''
@@ -457,12 +457,6 @@ class Db:
         self.server = couch.Server(url)
         self.couchdb = self.server.database(self.name)
         return Db()
-
-
-    def save_obj(self, obj):
-        ''' save the pydantic object '''
-        o = self.save(obj.to_dict())
-        return obj.from_dict(o)
 
 
 def get_db_url(app):

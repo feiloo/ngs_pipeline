@@ -38,6 +38,7 @@ class ConfigParams(BaseModel):
     dev: bool
     app_secret_key: str
     workflow_output_dir: str
+    backend: str = 'nextflow'
 
 
 class Config:
@@ -65,6 +66,9 @@ class Config:
                 cfg = json.loads(f.read())
 
         self._params = ConfigParams(**cfg)
+
+    def __contains__(self, k):
+        return k in self.dict()
 
     def __getitem__(self, k):
         return self.dict()[k]

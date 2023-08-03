@@ -45,43 +45,6 @@ def processor(record: dict) -> dict:
     return d
 
 
-def retrieve_new_filemaker_data_full(filemaker, processor, backoff_time=5):
-    ''' 
-    iterate through all filemaker records in the table
-    do so in 1000 record batches until an error signals
-    that we've reached the end
-
-    sleep in between to not overload the server
-    save the raw data directly into the couchdb
-    '''
-    timeout = Timeout(2*60*60) # 2h in seconds
-
-    for batches_done in count():
-        try:
-            # backoff for a few seconds
-            sleep(backoff_time)
-            response = filemaker.get_all_records(offset=batches_done*1000+1, limit=1000)
-            records = response['data']
-
-            # only add new filemaker records, based on their id
-            new_records = list(filter(
-                lambda r: get_filemaker_id(r) not in db, 
-                records
-                ))
-
-            newdocs = list(map(processor, records))
-            db.save_bulk(newdocs)
-            logger.debug(f"saved {batches_done} batches")
-
-            if timeout.reached():
-                raise RuntimeError('database sync timed out took too long in total')
-        except Exception as e:
-            logger.warning(f'cant export batch {batches_done} or database timed out with error: {e}')
-            break
-
-    return batches_done
-
-
 def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5):
     '''
     iterate through the highest filemaker records according to recordid and appstate
@@ -95,6 +58,8 @@ def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5
     app_state = DB.get('app_state')
     last_synced_row = int(app_state['last_synced_filemaker_row'])
 
+    batch_size = 1000
+
     for batches_done in count():
         try:
             # backoff for a few seconds
@@ -102,9 +67,15 @@ def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5
 
             app_state = DB.get('app_state')
             last_synced_row = int(app_state['last_synced_filemaker_row'])
-            offset = last_synced_row + 1 + batches_done*1000
-            response = filemaker.get_all_records(offset=offset, limit=1000)
+            offset = last_synced_row + 1
+
+            # this might fail, if e.g. the offset+limit > the amount of records in filemaker
+            response = filemaker.get_all_records(offset=offset, limit=batch_size)
+
             records = list(response['data'])
+            if len(records) > batch_size:
+                raise RuntimeError(f'filemaker returned too many records for request {records}')
+
             logger.debug(f"retrieved {len(records)} filemaker_rows")
             logger.debug(f"last_synced_row_was {last_synced_row} and record id was {records[0]['recordId']}")
 
@@ -115,9 +86,9 @@ def retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5
                 ))
 
             num_dupes = len(records) - len(new_records) 
-            logger.info(f"not saving {num_dupes}")
+            logger.warning(f"not saving {num_dupes}")
 
-            app_state['last_synced_filemaker_row'] = offset + len(new_records)
+            app_state['last_synced_filemaker_row'] += len(records)
             newdocs = list(map(processor, new_records)) + [app_state]
             DB.save_bulk(newdocs)
 
@@ -200,7 +171,7 @@ def patient_from_exams(examinations: [Examination]) -> Patient :
         raise e
 
     if len({e.filemaker_record['Geschlecht'] for e in examinations}) != 1:
-        logger.warn(f'detected gender change in patient of examinations {examinations}')
+        logger.warning(f'detected gender change in patient of examinations {examinations}')
 
     gend = sorted_exams[-1].filemaker_record['Geschlecht']
     eids = [e.id for e in examinations]
@@ -285,7 +256,14 @@ def get_mp_number_from_path(p):
 
 def get_examination_of_sample(sample_path, missing_ok=False):
     mp_number_with_year = get_mp_number_from_path(str(sample_path))
-    mp_number, mp_year = mp_number_with_year.split('-')
+    mp_number, mp_y = mp_number_with_year.split('-')
+    
+    if 90 < int(mp_y) > 99:
+        mp_year = 1900 + int(mp_y)
+    else:
+        mp_year = 2000 + int(mp_y)
+
+    logger.info(f'mp_number {mp_number} mp_year {mp_year}')
 
     try:
         examinations = db.query(f'examinations/mp_number?key=[{mp_year},{mp_number}]').to_wrapped().values()
@@ -296,8 +274,10 @@ def get_examination_of_sample(sample_path, missing_ok=False):
     if missing_ok == False and len(examinations) == 0:
         raise RuntimeError(f"no examination found for sample: {sample}")
     elif len(examinations) >= 2:
-        raise RuntimeError(f"multiple examinations found for sample: {sample} examinations: {examinations}")
+        return examinations[0]
+        #raise RuntimeError(f"multiple examinations found for sample: {sample} examinations: {examinations}")
     elif missing_ok == True and len(examinations) == 0:
+        logger.info(f'exam for sample_path {sample_path} missing')
         return None
     else:
         examination = examinations[0]
@@ -309,16 +289,20 @@ def get_mp_number_from_filemaker_record(rec):
     return mpnr
 
 def get_samples_of_examination(examination):
-    ex_mpnr = get_mp_number_from_filemaker_record(examination.filemaker_record)
-    
-    sample_candidates = []
-    for srid in examination.sequencer_runs:
-        sample_candidates += db.get(srid).outputs
+    try:
+        ex_mpnr = get_mp_number_from_filemaker_record(examination.filemaker_record)
+        
+        sample_candidates = []
+        for srid in examination.sequencer_runs:
+            sample_candidates += db.get(srid).outputs
 
-    examination_samples = []
-    for sa in sample_candidates:
-        if get_mp_number_from_path(sa) == ex_mpnr:
-            examinations_samples.append(sa)
+        examination_samples = []
+        for sa in sample_candidates:
+            if get_mp_number_from_path(sa) == ex_mpnr:
+                examination_samples.append(sa)
+
+    except Exception as e:
+        logger.error(e)
 
     return examination_samples
 
@@ -346,8 +330,11 @@ def link_examinations_to_sequencer_run(examinations: [Examination], seq_run_id: 
     for exam in examinations:
         sruns = exam.sequencer_runs
         if seq_run_id not in sruns:
-            ex.sequencer_runs = sruns + [seq_run_id]
-            new_exams.append(ex)
+            logger.info(exam.sequencer_runs)
+            logger.info(dir(exam))
+            ex = exam.model_dump()
+            ex['sequencer_runs'] = sruns + [seq_run_id]
+            new_exams.append(Examination(**ex))
         else:
             continue
 
@@ -404,23 +391,21 @@ def poll_sequencer_output():
 
         examinations = []
         for s in outputs:
+            logger.info(f'af {s}')
             try:
                 x = get_examination_of_sample(s, missing_ok=True)
-                logger.info(x)
+                logger.info(f'the examination for sample {s} is {x}')
                 if x is not None:
                     examinations.append(x)
             except Exception as e:
                 logger.error(f'examination could not be obtained for sample: {s} due to: {e}')
 
-        logger.info(examinations)
+        logger.info(f'examinations for sequencer run are {examinations}')
         new_exams = link_examinations_to_sequencer_run(examinations, sequencer_run.id)
-        logger.info(new_exams)
+        logger.info(f'new exams: {new_exams}')
 
         # this validates the fields
         db.save_bulk([sequencer_run] + new_exams)
-        sequencer_runs.append(sequencer_run)
-
-    return sequencer_runs
 
 
 def start_workflow_impl(
@@ -432,6 +417,8 @@ def start_workflow_impl(
     logger.info(f'starting new pipeline run with inputs: {workflow_inputs} and panel: {panel_type}')
 
     examinations, samples = list(zip(*workflow_inputs))
+    logger.debug(examinations)
+    examinations = [Examination.model_validate_json(e) for e in examinations]
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
@@ -445,13 +432,12 @@ def start_workflow_impl(
     logger.debug(f"workflow type: {workflow_type}")
 
     if workflow_type is None:
-        logger.info('panel skipped')
+        logger.info('panel skipped because no workflow is set up for it')
         return
 
     workflow = workflow_paths[workflow_type]
 
     pipeline_run = PipelineRun(
-            False,
             id=str(uuid4()),
             created_time=datetime.now(),
             input_samples=[str(x) for x in samples],
@@ -466,19 +452,15 @@ def start_workflow_impl(
     # link pipeline runs to the examinations
     new_ex_docs = []
     for e in examinations:
-        d = e
-        d['pipeline_runs'] = e['pipeline_runs'] + [pipeline_run.id]
-        new_ex_docs.append(d)
+        d = e.model_dump()
+        d['pipeline_runs'] = e.pipeline_runs + [pipeline_run.id]
+        new_ex_docs.append(Examination(**d))
 
-    pipeline_run = db.save_obj(pipeline_run)
+    pipeline_run = db.save(pipeline_run)
     db.save_bulk(new_ex_docs)
 
-
     # pass is_aborted function to backend for stopping
-    if 'backend' in CONFIG:
-        backend = CONFIG['backend']
-    else:
-        backend = 'nextflow'
+    backend = CONFIG['backend']
     workflow_backend_execute(pipeline_run, is_aborted, backend)
 
 

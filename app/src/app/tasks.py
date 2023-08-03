@@ -43,9 +43,9 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @mq.task
 def sync_couchdb_to_filemaker():
-    #filemaker = Filemaker.from_config(CONFIG)
-    #retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5)
-    #create_examinations()
+    filemaker = Filemaker.from_config(CONFIG)
+    retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5)
+    create_examinations()
     aggregate_patients()
 
 
@@ -87,7 +87,6 @@ def start_pipeline(*args):
 
     work = {}
 
-
     for panel in panel_types: #filemaker_examination_types:
         if panel not in groups:
             continue
@@ -99,16 +98,16 @@ def start_pipeline(*args):
         for e in examinations:
             try:
                 ex_samples = get_samples_of_examination(e)
-                logger.info(f'samples of examination are {len(ex_samples)}')
+                logger.info(f'samples of examination are {ex_samples}')
                 if len(ex_samples) > 1:
-                    work[panel] = work[panel] + [(e, ex_samples[0])]
+                    work[panel] = work[panel] + [(e.model_dump_json(), str(ex_samples[0]))]
                     logger.error(f'more than one sample found for new_examination: {e}')
                 elif len(ex_samples) == 0:
                     logger.info(f'no sample found yet for new_examination: {e}')
                 else:
-                    work[panel] = work[panel] + [(e, ex_samples[0])]
-            except Exception as ex:
-                logger.error(f'cant obtain sample of examination: {ex} cause of {e}')
+                    work[panel] = work[panel] + [(e.model_dump_json(), str(ex_samples[0]))]
+            except Exception as exc:
+                logger.error(f'cant obtain sample of examination: {exc} cause of {e}')
 
     logger.info(f'collected the work: {work}')
 
