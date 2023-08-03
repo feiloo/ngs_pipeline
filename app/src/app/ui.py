@@ -43,7 +43,7 @@ def _get_pipeline_dashboard_html():
         current_app.logger.error('error fetching examinations_count, no query result rows, check if there are any examinations documents')
         number_examinations = 'unknown'
     else:
-        number_examinations = number_examinations.rows[0]
+        number_examinations = number_examinations_res.rows[0]
 
     def sort_by_date(field, rows):
         return reversed(sorted(rows, 
@@ -62,8 +62,19 @@ def _get_pipeline_dashboard_html():
             number_examinations=number_examinations
             )
 
+@admin.route("/db/view", methods=['GET'])
+def raw_view():
+    ''' this here allow to query a view directly like so:
+    http://localhost:8000/db/view?view=examinations/mp_number&key=[2023,2570]
+    '''
+    current_app.logger.error(request.args)
+    view = request.args['view']
+    key = request.args['key']
+    doc = db.query(view+"?key="+key).rows
+    ds = str(doc)
+    return render_template('raw_db_document.html', doc=doc,ds=ds)
 
-@admin.route("/db/raw/<document_id>", methods=['get'])
+@admin.route("/db/raw/<document_id>", methods=['GET'])
 def raw_document_view(document_id):
     doc = db.get(document_id)
     ds = str(doc)
@@ -81,7 +92,7 @@ def pipeline_sync():
     try:
         sync_couchdb_to_filemaker.apply_async(args=[])
     except Exception as e:
-        logger.error(e)
+        logger.error(f'error in pipeline sync filemaker {e}')
 
     return redirect('/pipeline_status')
 
@@ -91,7 +102,7 @@ def pipeline_sync_sequencer():
     try:
         sync_sequencer_output.apply_async(args=[])
     except Exception as e:
-        logger.error(e)
+        logger.error(f'error in pipeline sync sequencer {e}')
 
     return redirect('/pipeline_status')
 
@@ -107,14 +118,16 @@ def pipeline_status():
 
 @admin.route("/pipeline_autorun_enable", methods=['POST'])
 def pipeline_autorun_enable():
+    current_app.logger.info('enabeling pipeline autorunning')
     settings = db.get('app_settings')
     settings['autorun_pipeline'] = True
-    db.save(settings)
+    res = db.save(settings)
     return redirect('/pipeline_status')
     
 
 @admin.route("/pipeline_autorun_disable", methods=['POST'])
 def pipeline_autorun_disable():
+    current_app.logger.info('disabeling pipeline autorunning')
     settings = db.get('app_settings')
     settings['autorun_pipeline'] = False
     db.save(settings)
