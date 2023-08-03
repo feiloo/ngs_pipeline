@@ -17,8 +17,6 @@ logger = get_task_logger(__name__)
 
 # importantly, the config needs to be updated through the cli in app.py
 mq = Celery('ngs_pipeline')
-
-
 db = DB
 
 @mq.task
@@ -47,7 +45,7 @@ def setup_periodic_tasks(sender, **kwargs):
 def sync_couchdb_to_filemaker():
     #filemaker = Filemaker.from_config(CONFIG)
     #retrieve_new_filemaker_data_incremental(filemaker, processor, backoff_time=5)
-    create_examinations()
+    #create_examinations()
     aggregate_patients()
 
 
@@ -72,32 +70,47 @@ def start_pipeline(*args):
     if not, it runs the pipeline for the missing ones
     '''
 
+    panel_types = set()
+
+    for e in db.query('examinations/types').to_wrapped().values():
+        panel_types.add(e.examinationtype)
+
+    #logger.info(f'examinationtypes: {panel_types}')
+    #logger.info(f'examinationtypes count: {len(panel_types)}')
+    #return
+
     #sync_couchdb_to_filemaker()
     sync_sequencer_output()
     groups = collect_work()
 
+    #logger.info(groups[-2:])
+
     work = {}
 
-    for panel in filemaker_examination_types:
+
+    for panel in panel_types: #filemaker_examination_types:
         if panel not in groups:
             continue
 
         examinations = groups[panel]
         work[panel] = []
+        logger.info(f"number of new examinations: {len(examinations)}")
 
         for e in examinations:
             try:
                 ex_samples = get_samples_of_examination(e)
+                logger.info(f'samples of examination are {len(ex_samples)}')
                 if len(ex_samples) > 1:
-                    pass
-                    #logger.error(f'more than one sample found for new_examination: {e}')
+                    work[panel] = work[panel] + [(e, ex_samples[0])]
+                    logger.error(f'more than one sample found for new_examination: {e}')
                 elif len(ex_samples) == 0:
-                    pass
-                    #logger.info(f'no sample found yet for new_examination: {e}')
+                    logger.info(f'no sample found yet for new_examination: {e}')
                 else:
                     work[panel] = work[panel] + [(e, ex_samples[0])]
-            except Exception as e:
-                logger.error(f'cant obtain sample of examination: {e}')
+            except Exception as ex:
+                logger.error(f'cant obtain sample of examination: {ex} cause of {e}')
+
+    logger.info(f'collected the work: {work}')
 
     tasks = []
     for panel in work.keys():

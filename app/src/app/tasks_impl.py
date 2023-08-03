@@ -196,7 +196,7 @@ def patient_from_exams(examinations: [Examination]) -> Patient :
     try:
         birthdate = datetime.strptime(examinations[0].filemaker_record['GBD'], '%m/%d/%Y')
     except Exception as e:
-        logger.error(e)
+        logger.error(f'error during parsing of birthdate {e}')
         raise e
 
     if len({e.filemaker_record['Geschlecht'] for e in examinations}) != 1:
@@ -288,7 +288,7 @@ def get_examination_of_sample(sample_path, missing_ok=False):
     mp_number, mp_year = mp_number_with_year.split('-')
 
     try:
-        examinations = db.query(f'examinations/mp_number?key=[{mp_year},{mp_number}]')
+        examinations = db.query(f'examinations/mp_number?key=[{mp_year},{mp_number}]').to_wrapped().values()
     except db.NotFound:
         logger.info(f'no examination of sample {sample_path} found')
         examinations = [None]
@@ -310,11 +310,10 @@ def get_mp_number_from_filemaker_record(rec):
 
 def get_samples_of_examination(examination):
     ex_mpnr = get_mp_number_from_filemaker_record(examination.filemaker_record)
-    print(examination.sequencer_runs)
     
     sample_candidates = []
     for srid in examination.sequencer_runs:
-        sample_candidates += db.get(srid)['outputs']
+        sample_candidates += db.get(srid).outputs
 
     examination_samples = []
     for sa in sample_candidates:
@@ -340,13 +339,14 @@ def check_years_match(sequencer_run, samples):
         raise RuntimeError(f'sequencer run name has a different year than its output samples with sample year: {sample_years} and run year {run_year}')
 
 
-def link_examinations_to_sequencer_run(examinations: dict, seq_run_id: str):
+def link_examinations_to_sequencer_run(examinations: [Examination], seq_run_id: str):
     new_exams = []
+    logger.info(f"linking {len(examinations)} to {seq_run_id}")
 
     for exam in examinations:
-        ex = Examination(map_id=True, **exam).sequencer_runs
-        if seq_run_id not in ex.sequencer_runs:
-            ex.sequencer_runs = ex.sequencer_runs + [seq_run_id]
+        sruns = exam.sequencer_runs
+        if seq_run_id not in sruns:
+            ex.sequencer_runs = sruns + [seq_run_id]
             new_exams.append(ex)
         else:
             continue
@@ -361,7 +361,6 @@ def poll_sequencer_output():
 
     # first, sync db with miseq output data
     db_sequencer_runs = db.query('sequencer_runs/all').to_wrapped().values()
-    #db_sequencer_paths = [str(r['value']['original_path']) for r in db_sequencer_runs]
     db_sequencer_paths = [str(r.original_path) for r in db_sequencer_runs]
 
     fs_miseq_output_path = Path(CONFIG['miseq_output_folder'])
@@ -401,18 +400,21 @@ def poll_sequencer_output():
         try:
             check_years_match(sequencer_run, outputs)
         except Exception as e:
-            logger.error('sequencer run year could not be checked due to error: {e}')
+            logger.error(f'sequencer run year could not be checked due to error: {e}')
 
         examinations = []
         for s in outputs:
             try:
-                x = get_examination_of_sample(db, s, missing_ok=True)
+                x = get_examination_of_sample(s, missing_ok=True)
+                logger.info(x)
                 if x is not None:
                     examinations.append(x)
             except Exception as e:
                 logger.error(f'examination could not be obtained for sample: {s} due to: {e}')
 
+        logger.info(examinations)
         new_exams = link_examinations_to_sequencer_run(examinations, sequencer_run.id)
+        logger.info(new_exams)
 
         # this validates the fields
         db.save_bulk([sequencer_run] + new_exams)
@@ -519,8 +521,8 @@ def group_examinations_by_type(examinations):
     groups = {}
     for e in examinations:
         ty = e.filemaker_record['Untersuchung']
-        if ty not in filemaker_examination_types:
-            ty = 'invalid'
+        #if ty not in filemaker_examination_types:
+            #ty = 'invalid'
 
         if ty not in groups:
             groups[ty] = [e]
@@ -532,6 +534,7 @@ def group_examinations_by_type(examinations):
 
 def collect_work():
     new_examinations = db.query('examinations/new_examinations').to_wrapped().values()
+    print(len(new_examinations))
     groups = group_examinations_by_type(new_examinations)
     return groups
 
