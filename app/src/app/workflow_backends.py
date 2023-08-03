@@ -6,7 +6,7 @@ from celery.utils.log import get_task_logger
 logger = get_task_logger(__name__)
 
 
-def run_workflow_io(cmd, db, config, pipeline_run, is_aborted):
+def run_workflow_io(cmd, pipeline_run, is_aborted):
     ''' a function that runs a pipeline run on a workflow backend
     results and logs are saved onto the filesystem by the workflow backend
     but also ingested into the database
@@ -42,7 +42,7 @@ def run_workflow_io(cmd, db, config, pipeline_run, is_aborted):
                     pipeline_run.logs.stderr = stde.read().decode('utf-8')
                     pipeline_run.logs.stdout = stdo.read().decode('utf-8')
 
-                    pipeline_run = db.save_obj(pipeline_run)
+                    pipeline_run = db.save(pipeline_run)
                     time.sleep(1)
 
                 # update db entry at the end
@@ -59,25 +59,25 @@ def run_workflow_io(cmd, db, config, pipeline_run, is_aborted):
                 else:
                     pipeline_run.status = 'error'
 
-                pipeline_run = db.save_obj(pipeline_run)
+                pipeline_run = db.save(pipeline_run)
 
     except Exception as e:
-        logger.warning(e)
+        logger.warning('error running workflow io {e}')
         
         # check types by converting into domain model object
-        pipeline_document = pipeline_run.to_dict()
+        pipeline_document = pipeline_run.model_dump()
         pipeline_document['status'] = 'error'
         pipeline_run = pipeline_run.from_dict(pipeline_document)
-        pipeline_run = db.save_obj(pipeline_run)
+        pipeline_run = db.save(pipeline_run)
 
 
-def workflow_backend_execute_noop(db, config, pipeline_run, is_aborted):
+def workflow_backend_execute_noop(pipeline_run, is_aborted):
     pass
 
-def workflow_backend_execute_clc(db, config, pipeline_run, is_aborted):
+def workflow_backend_execute_clc(pipeline_run, is_aborted):
     pass
 
-def workflow_backend_execute_nextflow(db, config, pipeline_run, is_aborted):
+def workflow_backend_execute_nextflow(pipeline_run, is_aborted):
     samplesheet_path = Path()
     cmd = ['nextflow', 'run', 
             '/opt/cio/variantinterpretation',
@@ -86,10 +86,10 @@ def workflow_backend_execute_nextflow(db, config, pipeline_run, is_aborted):
             'f{samplesheet_path}'
             ]
 
-    run_workflow_io(cmd, db, config, pipeline_run, is_aborted)
+    run_workflow_io(cmd, pipeline_run, is_aborted)
 
 
-def workflow_backend_execute_miniwdl(db, config, pipeline_run, is_aborted):
+def workflow_backend_execute_miniwdl(pipeline_run, is_aborted):
     clc_host = config['clc_host']
     clc_user = config['clc_user']
     clc_psw = config['clc_psw']
@@ -102,14 +102,14 @@ def workflow_backend_execute_miniwdl(db, config, pipeline_run, is_aborted):
             pipeline_run.workflow
             ] + [f'files={i}' for i in pipeline_run.input_samples]
 
-    run_workflow_io(cmd, db, config, pipeline_run, is_aborted)
+    run_workflow_io(cmd, pipeline_run, is_aborted)
 
 
-def workflow_backend_execute(db, config, pipeline_run, is_aborted, backend):
+def workflow_backend_execute(pipeline_run, is_aborted, backend):
     logger.debug(f'workflow backend starts executing {pipeline_run.id}')
 
     if backend == 'noop':
-        workflow_backend_execute_noop(db, config, pipeline_run, is_aborted)
+        workflow_backend_execute_noop(pipeline_run, is_aborted)
     elif backend == 'clc':
         raise NotImplemented()
     elif backend == 'nextflow':
