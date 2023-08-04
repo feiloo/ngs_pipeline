@@ -79,8 +79,8 @@ def raw_view():
 @admin.route("/db/raw/<document_id>", methods=['GET'])
 def raw_document_view(document_id):
     doc = db.get(document_id)
-    ds = str(doc)
-    return render_template('raw_db_document.html', doc=doc,ds=ds)
+    ds = doc.model_dump_json(indent=2)
+    return render_template('raw_db_document.html', doc=doc, ds=ds)
 
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():
