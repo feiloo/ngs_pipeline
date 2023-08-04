@@ -386,7 +386,7 @@ class Db:
         self._check_con()
         return _wrap(self.couchdb.get(*args,**kwargs))
 
-    def bulk_get(self, ids, *args, **kwargs):
+    def get_bulk(self, ids, *args, **kwargs):
         return [self.get(i) for i in ids]
 
     def _obj_to_d(self, obj):
