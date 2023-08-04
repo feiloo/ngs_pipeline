@@ -42,6 +42,7 @@ filemaker_examination_types = [
         'NNGM Lunge Qiagen',
         'RNA Fusion Lunge',
         'RNA Sarkompanel',
+        'BRCANess Qiagen'
         ]
 
 
@@ -68,6 +69,7 @@ class PipelineRun(BaseDocument):
     created_time: datetime
     input_samples: List[Path]
     workflow: str
+    panel_type: str
     status: Literal['running', 'error', 'successful']
     logs: PipelineLogs
 

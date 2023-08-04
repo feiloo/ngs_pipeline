@@ -62,32 +62,40 @@ schema = [
 
 
 filemaker_examination_types_workflow_mapping = {
-        'DNA Lungenpanel Qiagen - kein nNGM Fall':'NGS DNA Lungenpanel',
+        'DNA Lungenpanel Qiagen - kein nNGM Fall':'NGS_dna_loung',
         'DNA Panel ONCOHS': 'NGS oncoHS',
-        'DNA PANEL ONCOHS (Mamma)': 'NGS oncoHS', # basically calls ONCOHS,
-        'DNA PANEL ONCOHS (Melanom)': 'NGS oncoHS',# basically calls ONCOHS
-        'DNA PANEL ONCOHS (Colon)': 'NGS oncoHS',# basically calls ONCOHS
-        'DNA PANEL ONCOHS (GIST)': 'NGS oncoHS',# basically calls ONCOHS
+        'DNA PANEL ONCOHS (Mamma)': 'NGS_oncohs', # basically calls ONCOHS,
+        'DNA PANEL ONCOHS (Melanom)': 'NGS_oncohs',# basically calls ONCOHS
+        'DNA PANEL ONCOHS (Colon)': 'NGS_oncohs',# basically calls ONCOHS
+        'DNA PANEL ONCOHS (GIST)': 'NGS_oncohs',# basically calls ONCOHS
         'DNA PANEL 522': None, # research panel
         'DNA PANEL Multimodel PanCancer DNA': None,
         'DNA PANEL Multimodel PanCancer RNA': None,
-        'NNGM Lunge Qiagen': None,
-        'RNA Fusion Lunge': 'NGS RNA Fusion Lunge',
+        'NNGM Lunge Qiagen': 'NGS_dna_loung',
+        'RNA Fusion Lunge': 'NGS_rna_fusion_loung',
         'RNA Sarkompanel': None,
         }
 
 
-#'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/clc_workflows/clc_loung_workflow.wdl',
-
-workflow_paths = {
-    'NGS DNA Lungenpanel': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-    'NGS oncoHS' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
-    'NGS BRCAness': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-    'NGS RNA Sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-    'NGS RNA Fusion Lunge': '/data/ngs_pipeline/workflow/wdl/test.wdl',
-    'NGS PanCancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+workflow_paths_wdl = {
+    'NGS_dna_lungenpanel': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS_oncohs' : '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS_brcaness': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS_rna_sarkom': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS_rna_fusion_Lunge': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS_pancancer': '/data/ngs_pipeline/workflow/wdl/test.wdl',
+    'NGS_dna_loung': '/data/ngs_pipeline/workflow/wdl/test.wdl',
     }
 
-#workflow = '/data/ngs_pipeline/workflow/wdl/test.wdl'
-#workflow = '/data/ngs_pipeline/workflow/wdl/clc_test.wdl'
-#workflow = '/data/ngs_pipeline/workflow/wdl/ngs_pipeline.wdl'
+workflow_paths_nextflow = {
+    'NGS_dna_loung': '/opt/cio/variantinterpretation'
+    }
+
+workflow_paths_clc = {}
+
+workflow_impls = {
+    'clc': workflow_paths_clc,
+    'nextflow': workflow_paths_nextflow,
+    'wdl': workflow_paths_wdl,
+    'noop': 'noop',
+    }
