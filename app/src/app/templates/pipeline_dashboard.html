@@ -71,6 +71,30 @@ td {
 
 
   <div>
+    <h2> Patients </h2>
+	    <table> 
+	    <tr>
+		<th>fullname</th>
+		<th>examinations</th>
+		<th>birthdate</th>
+		<th>gender</th>
+	    </tr>
+	    {% for patient in patients %}
+	    <tr>
+		<td><nobr><data>{{ patient['names']['fullname'] }}<data></td>
+		<td><nobr><data>
+				{% for e in patient['examinations'] %}
+				<a href="/db/raw/{{ e }}">{{ e[:4] }},</a>
+				{% endfor %}
+			<data></td>
+		<td><nobr><data>{{ patient['birthdate'] }}<data></td>
+		<td><nobr><data>{{ patient['gender'] }}<data></td>
+		<td><nobr><a href="/db/raw/{{ patient['_id'] }}">{{ patient['_id'] }}</a></td>
+	    </tr>
+	    {% endfor %}
+	    </table>
+  </div>
+  <div>
     <h2> Examinations </h2>
             <div>Examination count: {{ number_examinations }}</div>
 	    <table> 

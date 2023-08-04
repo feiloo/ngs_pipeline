@@ -31,6 +31,7 @@ def _get_pipeline_dashboard_html():
     sequencer_runs = db.query('sequencer_runs/all?limit10&descending=true').values()
 
     examinations = db.query('examinations/examinations?limit=10&skip=10&descending=true').values()
+    patients = db.query('patients/patients?limit=10&skip=10&descending=true').values()
 
     settings = db.get('app_settings')
     pipeline_schedule = settings['schedule']
@@ -51,6 +52,7 @@ def _get_pipeline_dashboard_html():
 
     return render_template('pipeline_dashboard.html', 
             examinations=examinations,
+            patients=patients,
             pipeline_version=PIPELINE_VERSION,
             pipeline_progress=progress,
             pipeline_status=f'{pipeline_status}',
