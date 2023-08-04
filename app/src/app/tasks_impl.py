@@ -13,7 +13,7 @@ from more_itertools import flatten
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types, document_class_map, BaseDocument
-from app.constants import filemaker_examination_types_workflow_mapping, workflow_paths
+from app.constants import filemaker_examination_types_workflow_mapping, workflow_impls
 from app.tasks_utils import Timeout, Schedule
 from app.workflow_backends import workflow_backend_execute
 
@@ -274,8 +274,7 @@ def get_examination_of_sample(sample_path, missing_ok=False):
     if missing_ok == False and len(examinations) == 0:
         raise RuntimeError(f"no examination found for sample: {sample}")
     elif len(examinations) >= 2:
-        return examinations[0]
-        #raise RuntimeError(f"multiple examinations found for sample: {sample} examinations: {examinations}")
+        raise RuntimeError(f"multiple examinations found for sample: {sample} examinations: {examinations}")
     elif missing_ok == True and len(examinations) == 0:
         logger.info(f'exam for sample_path {sample_path} missing')
         return None
@@ -289,6 +288,8 @@ def get_mp_number_from_filemaker_record(rec):
     return mpnr
 
 def get_samples_of_examination(examination):
+    examination_samples = []
+
     try:
         ex_mpnr = get_mp_number_from_filemaker_record(examination.filemaker_record)
         
@@ -296,13 +297,12 @@ def get_samples_of_examination(examination):
         for srid in examination.sequencer_runs:
             sample_candidates += db.get(srid).outputs
 
-        examination_samples = []
         for sa in sample_candidates:
             if get_mp_number_from_path(sa) == ex_mpnr:
                 examination_samples.append(sa)
 
     except Exception as e:
-        logger.error(e)
+        logger.error(f'cant get samples of examination {examination.id}')
 
     return examination_samples
 
@@ -414,11 +414,15 @@ def start_workflow_impl(
         panel_type: str
         ):
 
+    backend = CONFIG['backend']
+
     logger.info(f'starting new pipeline run with inputs: {workflow_inputs} and panel: {panel_type}')
 
     examinations, samples = list(zip(*workflow_inputs))
     logger.debug(examinations)
-    examinations = [Examination.model_validate_json(e) for e in examinations]
+    #examinations = [Examination.model_validate_json(e) for e in db.get_bulk(examinations)]
+    examinations = db.get_bulk(examinations)
+    #[Examination.model_validate_json(e) for e in examinations]
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
@@ -435,13 +439,14 @@ def start_workflow_impl(
         logger.info('panel skipped because no workflow is set up for it')
         return
 
-    workflow = workflow_paths[workflow_type]
+    workflow_impl = workflow_impls[backend][workflow_type]
 
     pipeline_run = PipelineRun(
             id=str(uuid4()),
             created_time=datetime.now(),
             input_samples=[str(x) for x in samples],
-            workflow=workflow,
+            workflow=workflow_impl,
+            panel_type=panel_type,
             status='running',
             logs={
                 'stderr': '',
@@ -456,11 +461,10 @@ def start_workflow_impl(
         d['pipeline_runs'] = e.pipeline_runs + [pipeline_run.id]
         new_ex_docs.append(Examination(**d))
 
-    pipeline_run = db.save(pipeline_run)
+    db.save(pipeline_run)
     db.save_bulk(new_ex_docs)
 
     # pass is_aborted function to backend for stopping
-    backend = CONFIG['backend']
     workflow_backend_execute(pipeline_run, is_aborted, backend)
 
 

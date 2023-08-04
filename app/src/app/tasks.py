@@ -100,16 +100,18 @@ def start_pipeline(*args):
                 ex_samples = get_samples_of_examination(e)
                 logger.info(f'samples of examination are {ex_samples}')
                 if len(ex_samples) > 1:
-                    work[panel] = work[panel] + [(e.model_dump_json(), str(ex_samples[0]))]
+                    for exs in ex_samples:
+                        work[panel] = work[panel] + [(e.id, str(exs))]
                     logger.error(f'more than one sample found for new_examination: {e}')
                 elif len(ex_samples) == 0:
                     logger.info(f'no sample found yet for new_examination: {e}')
                 else:
-                    work[panel] = work[panel] + [(e.model_dump_json(), str(ex_samples[0]))]
+                    work[panel] = work[panel] + [(e.id, str(ex_samples[0]))]
             except Exception as exc:
                 logger.error(f'cant obtain sample of examination: {exc} cause of {e}')
 
     logger.info(f'collected the work: {work}')
+    logger.info(f'work: {work}')
 
     tasks = []
     for panel in work.keys():
