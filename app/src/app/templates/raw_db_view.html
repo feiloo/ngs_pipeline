@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+<head>
+<title>Raw DB Document {{ doc['_id'] }}</title>
+</head>
+<body>
+{% for d in ds %}
+<div>
+<pre>Raw DB Document: {{ d }}</pre>
+</div>
+{% endfor %}
+</body>
+</html>

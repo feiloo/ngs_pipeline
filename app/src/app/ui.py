@@ -7,10 +7,11 @@ from app.constants import *
 from app.config import CONFIG
 from app.model import panel_types, SequencerInputSample, Examination, Patient
 
-from app.tasks import start_pipeline, sync_couchdb_to_filemaker, sync_sequencer_output, mq
+from app.tasks import start_pipeline, sync_couchdb_to_filemaker, sync_sequencer_output, mq, start_workflow
 from app.db import DB
 
 import pycouchdb as couch
+import json
 
 APP_VERSION = '0.0.1'
 PIPELINE_VERSION = APP_VERSION
@@ -73,8 +74,8 @@ def raw_view():
     view = request.args['view']
     key = request.args['key']
     doc = db.query(view+"?key="+key).rows
-    ds = str(doc)
-    return render_template('raw_db_document.html', doc=doc,ds=ds)
+    ds = [json.dumps(d, indent=2) for d in doc]
+    return render_template('raw_db_view.html', doc=doc,ds=ds)
 
 @admin.route("/db/raw/<document_id>", methods=['GET'])
 def raw_document_view(document_id):
@@ -86,6 +87,18 @@ def raw_document_view(document_id):
 def pipeline_start():
     current_app.logger.info('start pipeline')
     result = start_pipeline.apply_async(args=[])
+    return redirect('/pipeline_status')
+
+@admin.route("/pipeline_start_custom", methods=['POST'])
+def pipeline_start_custom():
+    current_app.logger.info('start pipeline custom')
+    examinations = request.form['examinations'].split(',')
+    samples = request.form['sample_paths'].split(',')
+    inputs = list(zip(examinations, samples))
+    panel_type = request.form['panel_type']
+    print(inputs)
+    print(panel_type)
+    result = start_workflow.apply_async(args=[inputs, panel_type])
     return redirect('/pipeline_status')
 
 @admin.route("/pipeline_sync_filemaker", methods=['POST'])
