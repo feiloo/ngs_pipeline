@@ -1,10 +1,13 @@
 import subprocess
 import tempfile
 
+import csv
+
 from celery.utils.log import get_task_logger
 
 logger = get_task_logger(__name__)
 
+BACKENDS = ['noop','clc','nextflow','miniwdl']
 
 def run_workflow_io(cmd, pipeline_run, is_aborted):
     ''' a function that runs a pipeline run on a workflow backend
@@ -78,12 +81,24 @@ def workflow_backend_execute_clc(pipeline_run, is_aborted):
     pass
 
 def workflow_backend_execute_nextflow(pipeline_run, is_aborted):
-    samplesheet_path = Path()
+    samplesheet_path = '/tmp/samplesheet1.csv'
+    with open(samplesheet_path, 'w') as csvfile:
+        fieldnames = ['sample', 'vcf']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for i, s in enumerate(pipeline_run.input_samples):
+            writer.writerow({'sample':f'sample_{i}', 'vcf':s})
+
+    nextflow_panel_transcript_lists = {
+            'NNGM Lunge Qiagen': '/opt/cio/transcriptlists/transcriptlist_nngm_lunge_qiagen.tsv'
+            }
+
     cmd = ['nextflow', 'run', 
             '/opt/cio/variantinterpretation',
-            '-c', f'/opt/cio/variantinterpretation.conf', 
-            '--input',
-            'f{samplesheet_path}'
+            '-c', '/opt/cio/variantinterpretation.conf', 
+            '--input', str(samplesheet_path),
+            '--transcriptlist', str(nextflow_panel_transcript_lists[pipeline_run.panel_type])
             ]
 
     run_workflow_io(cmd, pipeline_run, is_aborted)
@@ -111,10 +126,10 @@ def workflow_backend_execute(pipeline_run, is_aborted, backend):
     if backend == 'noop':
         workflow_backend_execute_noop(pipeline_run, is_aborted)
     elif backend == 'clc':
-        raise NotImplemented()
+        raise NotImplemented
     elif backend == 'nextflow':
-        raise NotImplemented()
+        workflow_backend_execute_nextflow(pipeline_run, is_aborted)
     elif backend == 'miniwdl':
-        raise NotImplemented()
+        raise NotImplemented
     else:
         raise RuntimeError(f"invalid workflow backend: {backend}")
