@@ -74,9 +74,9 @@ td {
     <h2> Patients </h2>
 	    <table> 
 	    <tr>
-		<th>fullname</th>
+		<th>fullname (First Lastname)</th>
 		<th>examinations</th>
-		<th>birthdate</th>
+		<th>birthdate (YYYY-MM-DD)</th>
 		<th>gender</th>
 	    </tr>
 	    {% for patient in patients %}
@@ -118,11 +118,22 @@ td {
 	    <table> 
 	    <tr>
 		<th>original path</th>
+		<th>output samples</th>
                 <th>raw_document</th>
 	    </tr>
 	    {% for run in sequencer_runs %}
 	    <tr>
 		<td><nobr><data>{{ run['original_path'] }}<data></td>
+		    <td>
+			    <details>
+			    <summary> output samples </summary>
+				    <div style="overflow:scroll;height:200px;width:">
+				    {% for l in run['outputs'] %}
+				    <nobr>{{l}}<br>
+				    {% endfor %}
+				    </div>
+			    </details>
+		    </td>
 	        <td><nobr><a href="/db/raw/{{ run['_id'] }}">{{run['_id']}}</a></td>
 	    </tr>
 	    {% endfor %}
