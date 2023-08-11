@@ -4,6 +4,9 @@ import tempfile
 import csv
 
 from celery.utils.log import get_task_logger
+from app.parsers import parse_fastq_name
+
+from pathlib import Path
 
 logger = get_task_logger(__name__)
 
@@ -80,15 +83,49 @@ def workflow_backend_execute_noop(pipeline_run, is_aborted):
 def workflow_backend_execute_clc(pipeline_run, is_aborted):
     pass
 
+def check_pair(a,b):
+    pa = parse_fastq_name(Path(a).name)
+    pb = parse_fastq_name(Path(b).name)
+    if pa.pop('read') != 'R1':
+        raise RuntimeError()
+    if pb.pop('read') != 'R2':
+        raise RuntimeError()
+    if pa != pb:
+        raise RuntimeError()
+
+
+def group_samples(samples):
+    s = sorted(samples)
+    pair = list(zip(samples[0::2], samples[1::2]))
+    res = []
+    for a,b in pair:
+        check_pair(a,b)
+        res.append((parse_fastq_name(a.name)['sample_name'], a,b))
+
+    return res
+        
+        
+
+
 def workflow_backend_execute_nextflow(pipeline_run, is_aborted):
     samplesheet_path = '/tmp/samplesheet1.csv'
+
     with open(samplesheet_path, 'w') as csvfile:
-        fieldnames = ['sample', 'vcf']
+        #fieldnames = ['sample', 'vcf']
+        fieldnames = ['patient', 'fastq_1', 'fastq_2']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-        for i, s in enumerate(pipeline_run.input_samples):
-            writer.writerow({'sample':f'sample_{i}', 'vcf':s})
+        for group in group_samples(pipeline_run.input_samples):
+            #writer.writerow({'sample':f'sample_{i}', 'vcf':s})
+            row = {'patient':str(group[0]), 'fastq_1':str(group[1]), 'fastq_2': str(group[2])}
+            logger.info(row)
+            writer.writerow(row)
+
+    return
+
+        #for i, s in enumerate(pipeline_run.input_samples):
+            #writer.writerow({'sample':f'sample_{i}', 'vcf':s})
 
     nextflow_panel_transcript_lists = {
             'NNGM Lunge Qiagen': '/opt/cio/transcriptlists/transcriptlist_nngm_lunge_qiagen.tsv'
@@ -98,6 +135,15 @@ def workflow_backend_execute_nextflow(pipeline_run, is_aborted):
             '/opt/cio/variantinterpretation',
             '-c', '/opt/cio/variantinterpretation.conf', 
             '--input', str(samplesheet_path),
+            '--transcriptlist', str(nextflow_panel_transcript_lists[pipeline_run.panel_type])
+            ]
+
+    cmd = ['nextflow', 'run', 
+            '/opt/cio/sarek',
+            '-profile','podman',
+            #'-c', '/opt/cio/sarek.conf', 
+            '--input', str(samplesheet_path),
+            '--outdir', '/tmp/bla',
             '--transcriptlist', str(nextflow_panel_transcript_lists[pipeline_run.panel_type])
             ]
 
