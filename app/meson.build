@@ -5,7 +5,6 @@ bash_bin = find_program('bash')
 pyfiles = [
 	'pyproject.toml',
 	'setup.py',
-	'src/__init__.py',
 	'src/app/app.py',
 	'src/app/config.py',
 	'src/app/constants.py',
@@ -15,19 +14,19 @@ pyfiles = [
 	'src/app/__init__.py',
 	'src/app/model.py',
 	'src/app/parsers.py',
-	'src/app/samplesheet.py',
 	'src/app/tasks_impl.py',
 	'src/app/tasks.py',
 	'src/app/tasks_utils.py',
 	'src/app/templates/pipeline_dashboard.html',
 	'src/app/templates/raw_db_document.html',
-	'src/app/templates/samplesheet_template.csv',
-	'src/app/templates/tracking_form.html',
+	'src/app/templates/raw_db_view.html',
 	'src/app/ui.py',
-	'src/app/workflow_backends.py'
+	'src/app/workflow_backends.py',
+	'src/__init__.py',
 	]
 
 testfiles = [
+	'tests/conftest.py',
 	'tests/test_app.py',
 	'tests/test_db.py',
 	'tests/test_filemaker_api.py',
@@ -40,11 +39,18 @@ testfiles = [
 	'tests/test_workflow_backends.py',
 	]
 
+testdata = [
+	'tests/fake_sequencer_output_dir/220101_M00000_0000_000000000-XXXXX/Alignment_1/20220101_000000/Fastq/2500-22_S01_L001_R1_001.fastq.gz',
+	'tests/fake_sequencer_output_dir/220101_M00000_0000_000000000-XXXXX/Alignment_1/20220101_000000/Fastq/2500-22_S01_L001_R2_001.fastq.gz',
+	'tests/fake_sequencer_output_dir/220101_M00000_0000_000000000-XXXXX/Alignment_1/20220101_000000/Fastq/2600-22-wdh_S01_L001_R1_001.fastq.gz',
+	'tests/fake_sequencer_output_dir/220101_M00000_0000_000000000-XXXXX/Alignment_1/20220101_000000/Fastq/2600-22-wdh_S01_L001_R2_001.fastq.gz',
+	]
+
 # this has the python sources as inputs, for triggering change detection and caching
 # even though they arent used in the cp command
 # Warning, this copies all local files, not just the python sources
 copy_py_sources = custom_target('copy_py_sources',
-	input : pyfiles + testfiles,
+	input : pyfiles + testfiles + testdata,
 	output : 'app',
 	command : ['cp', '-r', '@CURRENT_SOURCE_DIR@/../app/', '@OUTDIR@'],
 	install : false,
