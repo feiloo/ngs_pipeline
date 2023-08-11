@@ -295,14 +295,15 @@ def get_samples_of_examination(examination):
         
         sample_candidates = []
         for srid in examination.sequencer_runs:
-            sample_candidates += db.get(srid).outputs
+            if srid in db:
+                sample_candidates += db.get(srid).outputs
 
         for sa in sample_candidates:
             if get_mp_number_from_path(sa) == ex_mpnr:
                 examination_samples.append(sa)
 
     except Exception as e:
-        logger.error(f'cant get samples of examination {examination.id}')
+        logger.error(f'cant get samples of examination {examination.id} because of {e}')
 
     return examination_samples
 
@@ -363,7 +364,7 @@ def poll_sequencer_output():
             parsed = {}
             dirty=True
 
-        outputs = list(Path(run_name).rglob('*.fastq.gz'))
+        outputs = list(sorted(Path(run_name).rglob('*.fastq.gz')))
 
         # run folder name doesnt adhere to illumina naming convention
         # because it has been renamed or manually copied
@@ -420,9 +421,7 @@ def start_workflow_impl(
 
     examinations, samples = list(zip(*workflow_inputs))
     logger.debug(examinations)
-    #examinations = [Examination.model_validate_json(e) for e in db.get_bulk(examinations)]
     examinations = db.get_bulk(examinations)
-    #[Examination.model_validate_json(e) for e in examinations]
 
     if panel_type == 'invalid':
         logger.warning('info, panel type invalid skipping')
@@ -444,7 +443,7 @@ def start_workflow_impl(
     pipeline_run = PipelineRun(
             id=str(uuid4()),
             created_time=datetime.now(),
-            input_samples=[str(x) for x in samples],
+            input_samples=[str(x) for x in flatten(samples)],
             workflow=workflow_impl,
             panel_type=panel_type,
             status='running',
