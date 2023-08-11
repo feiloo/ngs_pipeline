@@ -155,10 +155,6 @@ td {
 	    <td><nobr><data>{{ run['created_time'] }}<data></td>
 	    <td><nobr><data>{{ run['age'] }}<data></td>
 	    <td>{{ run['status'] }}</td>
-
-	    <!-- <span>inputs: <textarea readonly>{{ run['input_samples'] }}</textarea></span>
-	    <textarea readonly>{{ run['logs']['stdout'] }}</textarea> -->
-
 	    <td>
 		    <details>
 		    <summary> input samples </summary>
@@ -191,7 +187,9 @@ td {
     <div> enter examination ids, sample paths and the panel type separated by comma here </div>
     <textarea name='examinations' rows="1" cols="50"></textarea>
     <textarea name='sample_paths' rows="1" cols="50"></textarea>
-    <textarea name='panel_type' rows="1" cols="50"></textarea>
+    <select name='panel_type'>
+	<option value='NNGM Lunge Qiagen'>NNGM Lunge Qiagen</option>
+    </select>
     <button type="submit" value="start_custom">Start custom</button>
    </form>
   </div>
