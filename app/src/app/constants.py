@@ -76,6 +76,27 @@ filemaker_examination_types_workflow_mapping = {
         'RNA Sarkompanel': None,
         }
 
+'''
+name, is_ngs, is_recent
+"BRCANess Qiagen",x,x
+"DNA Lungenpanel",x,x
+"DNA Lungenpanel Qiagen - kein nNGM Fall ",x,x
+"DNA Panel 522",x,x
+"DNA Panel OncoHS",x,x
+"DNA Panel OncoHS (Colon)",x,x
+"DNA Panel OncoHS (GIST)",x,x
+"DNA Panel OncoHS (Mamma)",x,x
+"DNA Panel OncoHS (Melanom)",x,x
+"Multimodal PanCancer",x,x
+"Multimodal PanCancer DNA",x,x
+"Multimodal PanCancer RNA",x,x
+"NNGM Lunge Qiagen",x,x
+"NNGM Lunge Qiagen - kein nNGM Fall ",x,x
+"RNA Fusion Lunge",x,x
+"RNA Sarkompanel",x,x
+"RNA Sarkompanel 595",x,x
+'''
+
 
 workflow_paths_wdl = {
     'NGS_dna_lungenpanel': '/data/ngs_pipeline/workflow/wdl/test.wdl',
@@ -91,7 +112,10 @@ workflow_paths_nextflow = {
     'NGS_dna_loung': '/opt/cio/variantinterpretation'
     }
 
-workflow_paths_clc = {}
+workflow_paths_clc = {
+    'NGS oncoHS': 'wf-uniklinik_bonn-_pathologie-_molekulare_diagnostik-qiaseq_dna_routinepanel_oncohs_144-clc23-qiaseq-dna-routinepanel-oncohs-144-clc23'
+    'NGS_dna_loung': 'wf-ukb-_molecular_diagnostics-qiaseq_dna_lungenpanel_v2-2-clc23-1_dev-qiaseq-dna-lungenpanel-v2-2-clc23-1_dev'
+}
 
 workflow_impls = {
     'clc': workflow_paths_clc,
