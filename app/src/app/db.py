@@ -312,6 +312,9 @@ def unmap_id(doc):
 
 
 def _wrap(doc):
+    ''' if the document type is known, return a 
+    datamodel or domainmodel object instead
+    '''
     d = map_id(doc)
     if 'document_type' not in d:
         return d
@@ -390,6 +393,9 @@ class Db:
         return [self.get(i) for i in ids]
 
     def _obj_to_d(self, obj):
+        ''' turn a domainmodel or datamodel object into a dict
+        for saving into the database
+        '''
         # forbid directly writing _id and _rev to prevent bugs where it isnt properly mapped
 
         if isinstance(obj, BaseDocument):
