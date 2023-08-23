@@ -94,7 +94,8 @@ def pipeline_start_custom():
     current_app.logger.info('start pipeline custom')
     examinations = request.form['examinations'].split(',')
     samples = request.form['sample_paths'].split(',')
-    inputs = list(zip(examinations, samples))
+    print(samples)
+    inputs = list(zip(examinations, [samples]))
     panel_type = request.form['panel_type']
     print(inputs)
     print(panel_type)
