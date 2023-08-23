@@ -1,16 +1,29 @@
 import subprocess
 import tempfile
+import time
+from itertools import cycle
 
 import csv
 
 from celery.utils.log import get_task_logger
 from app.parsers import parse_fastq_name
+from app.config import CONFIG
+from app.db import DB
+from app.model import PipelineRun
 
 from pathlib import Path
+import signal
+
+import shutil
+import os
 
 logger = get_task_logger(__name__)
 
 BACKENDS = ['noop','clc','nextflow','miniwdl']
+
+config = CONFIG
+
+db = DB
 
 def run_workflow_io(cmd, pipeline_run, is_aborted):
     ''' a function that runs a pipeline run on a workflow backend
@@ -26,6 +39,9 @@ def run_workflow_io(cmd, pipeline_run, is_aborted):
         # we write to tempfile, even though there is an output log file in the wdl output directory, 
         # because elsewhere we dont know the run name
         # this will be fixed in future, for example by naming the runs
+        pipeline_run = db.get(pipeline_run.id)
+
+        prevlog=(pipeline_run.logs.stderr, pipeline_run.logs.stdout)
 
         with tempfile.TemporaryFile() as stde:
             with tempfile.TemporaryFile() as stdo:
@@ -36,51 +52,128 @@ def run_workflow_io(cmd, pipeline_run, is_aborted):
                         stderr=stdo,
                         )
 
-                # update db entry every second when the process runs
+                # update db entry periodically when the process runs
                 while pipeline_proc.poll() is None:
+                    '''
                     if is_aborted():
                         logger.warning(f'pipeline_run: {pipeline_run.id} is aborting')
                         pipeline_proc.send_signal(signal.SIGINT)
                         logger.warning(f'pipeline_run: {pipeline_run.id} was aborted')
+                    '''
 
                     stde.seek(0)
                     stdo.seek(0)
                     pipeline_run.logs.stderr = stde.read().decode('utf-8')
                     pipeline_run.logs.stdout = stdo.read().decode('utf-8')
 
-                    pipeline_run = db.save(pipeline_run)
-                    time.sleep(1)
+                    nlog =(pipeline_run.logs.stderr, pipeline_run.logs.stdout)
+                    if nlog != prevlog:
+                        prevlog = nlog
+                        db.save(pipeline_run)
+                        pipeline_run = db.get(pipeline_run.id)
+
+                    time.sleep(5)
+
 
                 # update db entry at the end
+                pipeline_run = db.get(pipeline_run.id)
+
                 stde.seek(0)
                 stdo.seek(0)
                 pipeline_run.logs.stderr = stde.read().decode('utf-8')
                 pipeline_run.logs.stdout = stdo.read().decode('utf-8')
 
+                pipeline_document = pipeline_run.model_dump()
+
                 retcode = pipeline_proc.returncode
                 if retcode == 0:
-                    pipeline_run.status = 'successful'
+                    pipeline_document['status'] = 'successful'
                 elif retcode == signal.SIGINT:
-                    pipeline_run.status = 'aborted'
+                    pipeline_document['status'] = 'aborted'
                 else:
-                    pipeline_run.status = 'error'
+                    pipeline_document['status'] = 'error'
 
-                pipeline_run = db.save(pipeline_run)
+                db.save(PipelineRun(**pipeline_document))
+                pipeline_run = db.get(pipeline_run.id)
+                return pipeline_run
+
 
     except Exception as e:
-        logger.warning('error running workflow io {e}')
+        logger.warning(f'error running workflow io {e}')
         
         # check types by converting into domain model object
+        pipeline_run = db.get(pipeline_run.id)
         pipeline_document = pipeline_run.model_dump()
         pipeline_document['status'] = 'error'
-        pipeline_run = pipeline_run.from_dict(pipeline_document)
-        pipeline_run = db.save(pipeline_run)
+        db.save(PipelineRun(**pipeline_document))
+
+        raise e
 
 
 def workflow_backend_execute_noop(pipeline_run, is_aborted):
     pass
 
+
 def workflow_backend_execute_clc(pipeline_run, is_aborted):
+    clc_host = config['clc_host']
+    clc_user = config['clc_user']
+    clc_psw = config['clc_psw']
+
+    # todo parse date and samplename from samples
+
+    input_filepaths = pipeline_run.input_samples
+
+    '''
+    prefix = '/data'
+    def get_mount_cmd(fi):
+        return f'--mount=type=bind,src={fi},dst={prefix}{fi},ro=true'
+    '''
+
+    indir = '/PAT-Sequenzer/ImportExport/test_fhoelsch_18_08_2023/'
+    clc_indir = 'clc://serverfile/\\\\klinik.bn\\NAS\\PAT-Sequenzer\\ImportExport\\test_fhoelsch_18_08_2023\\' 
+    clc_outdir = 'clc://server/CLC Workbench Server Output Data/test_workflows/'
+
+    # copy input samples to import export dir
+    rundir = Path(indir) / pipeline_run.id
+    print(f'making dir {rundir}')
+    os.makedirs(rundir)
+
+    clc_filepaths = []
+    for f in input_filepaths:
+        name = Path(f).name
+        newf = str(rundir / name)
+        print(f'copying: {str(f)} to {newf}')
+        shutil.copyfile(str(f), newf)
+
+        newf_win = clc_indir + str(Path(pipeline_run.id) / name).replace('/', '\\')
+        clc_filepaths.append(newf_win)
+
+    #parsed = [parse_fastq_name(Path(x).name) for x in input_filepaths]
+    #samples = list(set([p['samplename'] for p in parsed]))
+
+    command_args = ['--workflow-input--5--import-command', 'ngs_import_illumina']
+    for fi in clc_filepaths:
+        command_args.append('--workflow-input--5--select-files')
+        command_args.append(str(fi))
+
+    print(command_args)
+
+    container_cmd = ['podman', 'run', '-ti','--rm'] \
+            + ['localhost/clcclient']
+
+    clc_auth = [
+            'clcserver', 
+            '-S', f'{clc_host}', 
+            '-U', f'{clc_user}', 
+            '-W', f'{clc_psw}', 
+            ]
+
+    workflow_cmd = ['-A', pipeline_run.workflow, '-d', clc_outdir]
+
+    cmd = container_cmd + clc_auth + workflow_cmd + command_args
+    print(' '.join(cmd))
+
+    run_workflow_io(cmd, pipeline_run, is_aborted)
     pass
 
 def check_pair(a,b):
@@ -172,7 +265,7 @@ def workflow_backend_execute(pipeline_run, is_aborted, backend):
     if backend == 'noop':
         workflow_backend_execute_noop(pipeline_run, is_aborted)
     elif backend == 'clc':
-        raise NotImplemented
+        workflow_backend_execute_clc(pipeline_run, is_aborted)
     elif backend == 'nextflow':
         workflow_backend_execute_nextflow(pipeline_run, is_aborted)
     elif backend == 'miniwdl':

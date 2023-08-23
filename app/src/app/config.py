@@ -38,7 +38,7 @@ class ConfigParams(BaseModel):
     dev: bool
     app_secret_key: str
     workflow_output_dir: str
-    backend: str = 'nextflow'
+    backend: str = 'clc'
 
 
 class Config:

@@ -420,6 +420,9 @@ def start_workflow_impl(
     logger.info(f'starting new pipeline run with inputs: {workflow_inputs} and panel: {panel_type}')
 
     examinations, samples = list(zip(*workflow_inputs))
+    print(workflow_inputs)
+    print(samples)
+
     logger.debug(examinations)
     examinations = db.get_bulk(examinations)
 
@@ -446,7 +449,7 @@ def start_workflow_impl(
             input_samples=[str(x) for x in flatten(samples)],
             workflow=workflow_impl,
             panel_type=panel_type,
-            status='running',
+            status='created',
             logs={
                 'stderr': '',
                 'stdout': '',
