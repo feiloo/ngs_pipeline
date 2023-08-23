@@ -70,7 +70,7 @@ class PipelineRun(BaseDocument):
     input_samples: List[Path]
     workflow: str
     panel_type: str
-    status: Literal['running', 'error', 'successful']
+    status: Literal['created', 'paused', 'running', 'error', 'aborted', 'successful']
     logs: PipelineLogs
 
 
