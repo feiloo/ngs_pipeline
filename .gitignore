@@ -139,3 +139,5 @@ folder_remap/test/remap_data
 *.unmap
 docs/output
 folder_remap/test/testdata
+
+.nextflow*
