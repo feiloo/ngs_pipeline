@@ -1,0 +1,24 @@
+#!/usr/bin/python3.11
+
+import subprocess
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+if len(args) == 0:
+    raise RuntimeError('no args provided for nextflow run wrapper')
+
+calldir = Path(__file__).parent.resolve()
+
+if args[0].startswith('/'):
+    workflow = args[0]
+else:
+    workflow = str(calldir/args[0])
+
+nxf_cache_dir='/opt/cio_ci/nextflow_run_dir'
+
+cmd = ['nextflow', 'run', workflow] + args[1:]
+print(f'using nextflow run wrapper.py, command: {cmd}, cache_dir: {nxf_cache_dir}')
+
+proc = subprocess.run(cmd, cwd=nxf_cache_dir)
+sys.exit(proc.returncode)
