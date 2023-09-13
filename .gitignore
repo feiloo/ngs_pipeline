@@ -141,3 +141,4 @@ docs/output
 folder_remap/test/testdata
 
 .nextflow*
+null
