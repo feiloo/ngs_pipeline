@@ -1,5 +1,6 @@
 from opensuse/leap
 
+
 RUN zypper install -y \
 	which \
 	java-17-openjdk \
@@ -7,3 +8,4 @@ RUN zypper install -y \
 	podman
 
 RUN curl -s https://get.nextflow.io | bash
+
