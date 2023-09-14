@@ -1,2 +1,2 @@
-option('packaging_format', type : 'combo', value : ['pip', 'container', 'rpm'], 
+option('packaging_format', type : 'combo', choices : ['pip', 'container', 'rpm'], 
 	description : 'choose how all the webapp components will be packaged')
