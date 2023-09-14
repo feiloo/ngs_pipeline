@@ -9,6 +9,7 @@ process clc_workflow_batch {
   container 'clcclient:latest'
   input:
     val files 
+    val args
 
   output:
     stdout emit: output
@@ -16,16 +17,16 @@ process clc_workflow_batch {
 
   script:
   def arg_pref = "--workflow-input--5--select-files"
-  def args = []
+  def args2 = []
   files.each{f -> 
-        args << "${arg_pref} \"clc://serverfile/${params.clc_import_dir}/${f[1].name}\"" 
+        args2 << "${arg_pref} \"clc://serverfile/${args.clc_import_dir}/${f[1].name}\"" 
 	}
 
-  def argstring = args.join(" ")
-  def destdir = params.clc_destdir
-  def workflow_name = params.workflow_name
+  def argstring = args2.join(" ")
+  def destdir = args.clc_destdir
+  def workflow_name = args.workflow_name
 
-  def outdir = params.clc_export_dir
+  def outdir = args.clc_export_dir
   def vcf_output = []
 
   files.each{f -> 
@@ -38,8 +39,7 @@ process clc_workflow_batch {
   """
 
   stub:
-  def args = []
-  def prefix = params.nas_import_dir
+  def prefix = args.nas_import_dir
 
   vcf_output = []
   files.each{f -> 
@@ -55,11 +55,12 @@ process clc_workflow_batch {
 process copyfiles {
   input:
     tuple val(sid), val(read)
+    val args
   output:
     tuple val(sid), val(ouf)
 
   script:
-  def prefix = params.nas_import_dir
+  def prefix = args.nas_import_dir
   def filen = file(read).getName()
   ouf = file(prefix)/filen
 
@@ -68,7 +69,7 @@ process copyfiles {
   """
 
   stub:
-  def prefix = params.nas_import_dir
+  def prefix = args.nas_import_dir
   def filen = file(read).getName()
   ouf = file(prefix)/filen
 
@@ -115,35 +116,38 @@ process writesamplesheet {
 }
 
 
-//include { VARIANTINTERPRETATION } from '/opt/cio/variantinterpretation/workflows/variantinterpretation.nf'
+workflow clc_nextflow {
+  take:
+    args
 
-workflow {
-  def samplesheet = params.samplesheet
-  samples = Channel.fromPath(samplesheet).splitCsv(header: true)
+  main:
+    def samplesheet = args.samplesheet
+    samples = Channel.fromPath(samplesheet).splitCsv(header: true)
 
-  samples.multiMap{ row ->
-        sampleid: "${row.sampleid}"
-        reads1: ["${row.sampleid}", "${row.read1}"]
-        reads2: ["${row.sampleid}", "${row.read2}"]
-        }.set{samplechannels}
+    samples.multiMap{ row ->
+          sampleid: "${row.sampleid}"
+          reads1: ["${row.sampleid}", "${row.read1}"]
+          reads2: ["${row.sampleid}", "${row.read2}"]
+          }.set{samplechannels}
 
-  reads = samplechannels.reads1.mix(samplechannels.reads2)
-  reads.view()
-  files = copyfiles(reads)
-  //samples = files.groupTuple(size:2).buffer(size: 2)
+    reads = samplechannels.reads1.mix(samplechannels.reads2)
+    reads.view()
+    files = copyfiles(reads, args)
+    //samples = files.groupTuple(size:2).buffer(size: 2)
 
-  //samples.view()
-  out = clc_workflow_batch(files.buffer(size: 2))
-  o = copyback(out.vcf_output.flatten().unique())
-  sheet = writesamplesheet(o.collect())
-  sheet.view()
+    //samples.view()
+    out = clc_workflow_batch(files.buffer(size: 2), args)
+    vcfs = copyback(out.vcf_output.flatten().unique())
+    sheet = writesamplesheet(vcfs.collect())
+    sheet.view()
 
-
-  //params.samplesheet = sheet
-  //params.input = sheet
-  //params.fasta = WorkflowMain.getGenomeAttribute(params, 'fasta')
-  //WorkflowMain.initialise(workflow, params, log)
-
-  //params.input = 
+    emit:
+      vcfs
+      sheet
 }
 
+
+workflow {
+  def args = params
+  clc_nextflow(args)
+}
