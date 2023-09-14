@@ -145,7 +145,5 @@ workflow {
   //WorkflowMain.initialise(workflow, params, log)
 
   //params.input = 
-
-
 }
 
