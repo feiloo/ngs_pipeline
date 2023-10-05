@@ -27,6 +27,7 @@ process arriba {
 	${task.cpus} \
   	${read1} \
 	${read2}
+  rm -rf ${reference_data}
   """
 }
 
