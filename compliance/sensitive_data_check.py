@@ -1,6 +1,6 @@
-
-# use file, to minimize dependencies
-
+'''
+check a repo for files that are likely to comtain sensitive data
+'''
 import os
 import argparse
 import pathlib

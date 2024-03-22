@@ -10,4 +10,5 @@ project('ngs_pipeline')
 subdir('compliance')
 subdir('folder_remap')
 subdir('app')
-subdir('workflow/nextflow/modules/')
+# todo: reenable and integrate nextflow workflows
+#subdir('workflow/nextflow/modules/')

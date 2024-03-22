@@ -1,14 +1,14 @@
-# ngs_pipeline
+# ngs_platform
 
-this projects goal is to build a bioinformatics pipeline for new clinical diagnosis methods.
+this projects goal is to build a bioinformatics platform for new clinical diagnosis.
 
 we target an unimpeded integration experience for new diagnosis methods.
 
 success will be indicated through a low time and engineering effort when deploying new diagnosis.
 
-this project is mostly for documentation, but secondly aimed at bioinformatic clinicians, researchers and brave developers wanting to run their own pipeline.
+this project is mostly for documentation, but secondly aimed at bioinformatic clinicians, researchers and brave developers wanting to run their own analysis platform.
 
-it also contains a webapp for controlling the pipeline execution and data management.
+it contains a webapp for controlling analysis pipelines and some data management.
 
 ## build
 
@@ -33,8 +33,7 @@ meson test
 meson dist
 ```
 
-meson dist creates a tarball from the latest commit, not the current dir
-the productions server automatically tries pulling the latest dist tarball
+note: meson dist creates a tarball from the latest commit, not the current dir
 
 ```
 # when changing the buildscripts sometimes you might need to run:
@@ -43,16 +42,7 @@ meson --reconfigure /tmp/builddir
 
 ## development
 
-when developing make sure to run:
+when developing, consider enabeling the provided git-hooks:
 ```
 cp git_hooks/* .git/hooks
 ```
-
-this enables pre commit checks to automatically ensure compliance
-
-## compliance
-
-to avoid commiting possibly sensitive data, there is a scanning script in compliance.
-it's executed during `meson test` and pre-commit.
-
-it's recommended to regularily check and extend that script with aggressive patterns for sensitive data detection.
