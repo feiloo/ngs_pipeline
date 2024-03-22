@@ -422,7 +422,7 @@ def start_single_workflow(
     samplesheet_root='/data/fhoelsch/input_Arriba'
     out_root = '/data/fhoelsch/output_Arriba'
 
-    dt = datetime.now().
+    dt = datetime.now()
     date_s = dt.strftime('%d_%m_%Y')
 
     samplesheet_path = Path(samplesheet_root) / f'samplesheet_{date_s}' 

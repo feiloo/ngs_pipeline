@@ -263,7 +263,7 @@ def run_ukb_main(samplesheet_path, output_dir, is_aborted):
             '/usr/lib/ukb_main_workflow'
             '-c', '/home/fhoelsch/nextflow_conf_general.config'
             '--samplesheet', str(samplesheet_path),
-            '--output_dir', str(output_dir
+            '--output_dir', str(output_dir)
             ]
     pipeline_proc = subprocess.run(
             cmd,
