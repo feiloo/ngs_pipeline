@@ -1,5 +1,5 @@
 from celery import Celery, chain, group
-from celery.utils.log import get_task_logger
+rom celery.utils.log import get_task_logger
 from celery.contrib.abortable import AbortableTask
 
 from app.model import filemaker_examination_types

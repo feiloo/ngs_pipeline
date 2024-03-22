@@ -12,8 +12,7 @@ from celery.utils.log import get_task_logger
 from more_itertools import flatten
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
-from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types, document_class_map, BaseDocument
-from app.constants import filemaker_examination_types_workflow_mapping, workflow_impls
+from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types, document_class_map, BaseDocument, panel_types
 from app.tasks_utils import Timeout, Schedule
 from app.workflow_backends import workflow_backend_execute
 
@@ -450,13 +449,8 @@ def start_workflow_impl(
         ):
 
     backend = CONFIG['backend']
-
     logger.info(f'starting new pipeline run with inputs: {workflow_inputs} and panel: {panel_type}')
-
     examinations, samples = list(zip(*workflow_inputs))
-    print(workflow_inputs)
-    print(samples)
-
     logger.debug(examinations)
     examinations = db.get_bulk(examinations)
 
@@ -464,24 +458,15 @@ def start_workflow_impl(
         logger.warning('info, panel type invalid skipping')
         return
 
-    if panel_type not in filemaker_examination_types_workflow_mapping:
-        logger.error(f"panel type: {panel_type} not known in filemaker examination_types")
+    if panel_type not in panel_types:
+        logger.error(f"panel type: {panel_type} not known")
         return
-
-    workflow_type = filemaker_examination_types_workflow_mapping[panel_type]
-    logger.debug(f"workflow type: {workflow_type}")
-
-    if workflow_type is None:
-        logger.info('panel skipped because no workflow is set up for it')
-        return
-
-    workflow_impl = workflow_impls[backend][workflow_type]
 
     pipeline_run = PipelineRun(
             id=str(uuid4()),
             created_time=datetime.now(),
             input_samples=[str(x) for x in flatten(samples)],
-            workflow=workflow_impl,
+            workflow='test',
             panel_type=panel_type,
             status='created',
             logs={
@@ -543,8 +528,6 @@ def group_examinations_by_type(examinations):
     groups = {}
     for e in examinations:
         ty = e.filemaker_record['Untersuchung']
-        #if ty not in filemaker_examination_types:
-            #ty = 'invalid'
 
         if ty not in groups:
             groups[ty] = [e]

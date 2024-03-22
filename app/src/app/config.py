@@ -39,7 +39,7 @@ class ConfigParams(BaseModel):
     dev: bool
     app_secret_key: str
     workflow_output_dir: str
-    backend: str = 'clc'
+    backend: str = 'noop'
 
     # local path to clc ImportExport dir
     clc_import_export_dir: Optional[str]

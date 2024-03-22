@@ -199,7 +199,7 @@ def workflow_backend_execute_nextflow(pipeline_run, is_aborted):
     cmd = ['nextflow', 'run', 
             '/usr/lib/ukb_main_workflow'
             '-c', '/home/fhoelsch/nextflow_conf_general.config'
-            '--workflow_variation', 'test',
+            '--workflow_variation', pipeline_run.workflow,
             '--samplesheet', str(samplesheet_path),
             ]
     run_workflow_io(cmd, pipeline_run, is_aborted)
