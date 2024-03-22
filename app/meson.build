@@ -10,7 +10,6 @@ pyfiles = [
 	'src/app/config.py',
 	'src/app/constants.py',
 	'src/app/db.py',
-	'src/app/domain_model.py',
 	'src/app/filemaker_api.py',
 	'src/app/__init__.py',
 	'src/app/model.py',

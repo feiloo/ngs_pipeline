@@ -5,7 +5,12 @@ from pydantic import BaseModel, Field
 from uuid import UUID
 import json
 
+''' contains classes for the data model and for domain actors '''
+
 DATA_MODEL_VERSION = '0.0.1'
+ACTOR_MODEL_VERSION = DATA_MODEL_VERSION
+
+# first the data model
 
 # based on the ordercodes of "NGS_Panel_Abdeckung_MolPath.docx"
 panel_types = [
@@ -151,3 +156,33 @@ document_class_map = {
         'examination': Examination, 
         'patient': Patient
         }
+
+
+# below are the domain actors
+# atm just unused stubs
+
+class Pipeline:
+    def __init__(self, db, config, backend):
+        self.db = db
+        self.config = config
+        self.filemaker = filemaker
+
+    def checkpoint(self):
+        pass
+
+    def run(self):
+        pass
+
+class Workflow:
+    pass
+
+class Sequencer:
+    def scan_output_files(self):
+        pass
+
+class Examination:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def link_to_sequencer_run(self, sequencer_run):
+        pass
