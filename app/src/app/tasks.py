@@ -2,6 +2,7 @@ from celery import Celery, chain, group
 rom celery.utils.log import get_task_logger
 from celery.contrib.abortable import AbortableTask
 
+from app.tasks_utils import Schedule
 from app.model import filemaker_examination_types
 from app.tasks_impl import (run_app_schedule_impl, start_workflow_impl, processor,
     retrieve_new_filemaker_data_incremental, create_examinations, aggregate_patients, 
@@ -19,6 +20,7 @@ logger = get_task_logger(__name__)
 mq = Celery('ngs_pipeline')
 db = DB
 
+
 @mq.task
 def run_schedule():
     run_app_schedule_impl()
@@ -26,19 +28,8 @@ def run_schedule():
 
 @mq.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
-    #sig = start_pipeline.signature(args=(config,))
     sig = run_schedule.signature(args=[])
     sender.add_periodic_task(10.0, sig, name='check for dynamically scheduled tasks')
-
-    # sender.add_periodic_task(300.0, sig, name='sync filemaker to couchdb')
-    # Executes every day at midnight
-    '''
-    sender.add_periodic_task(
-        crontab(hour=0, minute=0, day_of_week='*'),
-        #test.s('Happy Mondays!'),
-
-    )
-    '''
 
 
 @mq.task
@@ -80,19 +71,12 @@ def start_pipeline(*args):
     for e in db.query('examinations/types').to_wrapped().values():
         panel_types.add(e.examinationtype)
 
-    #logger.info(f'examinationtypes: {panel_types}')
-    #logger.info(f'examinationtypes count: {len(panel_types)}')
-    #return
-
-    #sync_couchdb_to_filemaker()
+    sync_couchdb_to_filemaker()
     sync_sequencer_output()
     groups = collect_work()
-
-    #logger.info(groups[-2:])
-
     work = {}
 
-    for panel in panel_types: #filemaker_examination_types:
+    for panel in panel_types:
         if panel not in groups:
             continue
 
@@ -129,5 +113,15 @@ def start_pipeline(*args):
     return promise
 
 
-    #plan_pipeline_runs()
-    #run_pipeline_runs()
+def run_app_schedule_impl():
+    schedule = Schedule(db)
+    schedule.acquire_lock()
+
+    try:
+        if schedule.is_enabled() and schedule.has_work_now():
+            s1 = sync_couchdb_to_filemaker.s()
+            s2 = start_pipeline.s()
+            res = chain(s1, s2)
+            res.apply_async()
+    finally:
+        schedule.release_lock()

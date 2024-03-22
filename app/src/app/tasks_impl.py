@@ -13,7 +13,7 @@ from more_itertools import flatten
 
 from app.parsers import parse_fastq_name, parse_miseq_run_name, parse_date
 from app.model import SequencerRun, PipelineRun, Examination, Patient, filemaker_examination_types, document_class_map, BaseDocument, panel_types
-from app.tasks_utils import Timeout, Schedule
+from app.tasks_utils import Timeout 
 from app.workflow_backends import workflow_backend_execute
 
 from app.db import DB
@@ -542,19 +542,3 @@ def collect_work():
     print(len(new_examinations))
     groups = group_examinations_by_type(new_examinations)
     return groups
-
-
-
-def run_app_schedule_impl():
-    schedule = Schedule(db)
-    schedule.acquire_lock()
-
-    try:
-        if schedule.is_enabled() and schedule.has_work_now():
-            s1 = sync_couchdb_to_filemaker.s()
-            s2 = start_pipeline.s()
-            res = chain(s1, s2)
-            res.apply_async()
-    finally:
-        schedule.release_lock()
-
