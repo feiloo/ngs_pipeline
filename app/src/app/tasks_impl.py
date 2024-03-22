@@ -408,6 +408,40 @@ def poll_sequencer_output():
         # this validates the fields
         db.save_bulk([sequencer_run] + new_exams)
 
+def search_fastqs(ids):
+    raise NotImplemented()
+
+def group_paths(fastq_paths):
+    raise NotImplemented()
+
+def start_single_workflow(
+        is_aborted: Callable, 
+        args
+        ):
+    # write a samplesheet
+    samplesheet_root='/data/fhoelsch/input_Arriba'
+    out_root = '/data/fhoelsch/output_Arriba'
+
+    dt = datetime.now().
+    date_s = dt.strftime('%d_%m_%Y')
+
+    samplesheet_path = Path(samplesheet_root) / f'samplesheet_{date_s}' 
+    output_dir = Path(out_root) / f'workflow_run_{date_s}'
+
+    ids = args
+
+    fastq_paths = search_fastqs(pids)
+    read1s, read2s = group_paths(fastq_paths)
+
+    sample_ids = [f's{pid}' for i in ids]
+
+    lines = ['sample_id,read1,read2'] + list(zip(sample_ids, read1s, read2s))
+
+    with sampesheet.open('w') as f:
+        f.writelines(lines)
+
+    return run_ukb_main(samplesheet_path, output_dir, is_aborted, backend)
+
 
 def start_workflow_impl(
         is_aborted: Callable, 

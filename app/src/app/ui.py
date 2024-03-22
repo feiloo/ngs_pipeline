@@ -83,6 +83,16 @@ def raw_document_view(document_id):
     ds = doc.model_dump_json(indent=2)
     return render_template('raw_db_document.html', doc=doc, ds=ds)
 
+@admin.route("/pipeline_start_single", methods=['POST'])
+def pipeline_start_single():
+    current_app.logger.info('pipeline start single')
+    ids = request.form['pids']
+    args = ids
+    start_workflow_single.apply_async(args=args)
+
+    return redirect('/pipline_start_single')
+
+
 @admin.route("/pipeline_start", methods=['POST'])
 def pipeline_start():
     current_app.logger.info('start pipeline')

@@ -113,7 +113,7 @@ workflow_paths_nextflow = {
     }
 
 workflow_paths_clc = {
-    'NGS oncoHS': 'wf-uniklinik_bonn-_pathologie-_molekulare_diagnostik-qiaseq_dna_routinepanel_oncohs_144-clc23-qiaseq-dna-routinepanel-oncohs-144-clc23'
+    'NGS oncoHS': 'wf-uniklinik_bonn-_pathologie-_molekulare_diagnostik-qiaseq_dna_routinepanel_oncohs_144-clc23-qiaseq-dna-routinepanel-oncohs-144-clc23',
     'NGS_dna_loung': 'wf-ukb-_molecular_diagnostics-qiaseq_dna_lungenpanel_v2-2-clc23-1_dev-qiaseq-dna-lungenpanel-v2-2-clc23-1_dev'
 }
 

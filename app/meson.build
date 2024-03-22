@@ -68,35 +68,58 @@ else
 	container_image = 'ngs_pipeline_container.tar'
 endif
 
-# note, this runs from the meson build directory, therefore '.' as build context
-container_target = custom_target('ngs_pipeline_container',
-	input : [containerfile] + pyfiles,
-	output : container_image,
-	depends : [copy_py_sources],
-	command : [container_engine, 'build', '-t', 'ngs_pipeline_container:latest', '-f', '@INPUT0@', '-o', 'type=tar,dest=@OUTPUT@', '.'],
-	build_by_default : true,
-	install : false,
-	)
+packaging_format = get_option('packaging_format')
+
+if packaging_format == 'container'
+	# note, this runs from the meson build directory, therefore '.' as build context
+	container_target = custom_target('ngs_pipeline_container',
+		input : [containerfile] + pyfiles,
+		output : container_image,
+		depends : [copy_py_sources],
+		command : [container_engine, 'build', '-t', 'ngs_pipeline_container:latest', '-f', '@INPUT0@', '-o', 'type=tar,dest=@OUTPUT@', '.'],
+		build_by_default : true,
+		install : false,
+		)
+elif packaging_format == 'rpm'
+	error('not supported yet')
+
+elif packaging_format == 'pip'
+	pip_package_target = custom_target('pip_package',
+		input : pyfiles,
+		output : container_image,
+		depends : [copy_py_sources],
+		command : [python_bin, '-m', 'pip', 'wheel', '@BUILD_ROOT@/app/app'],
+		build_by_default : true,
+		install : false,
+		)
+
+
+else
+	error('invalid packaging type')
+endif
 
 apppath = join_paths(meson.source_root(), 'app')
 testdir = join_paths(apppath, 'tests')
 
-test('pytest', python_bin, args : [
-	'-m',
-	'pytest', 
-	apppath,
-	'--testdir',
-	testdir
-	], 
-	timeout: 600)
+if packaging_format == 'pip'
+	test('pytest', python_bin, args : [
+		'-m',
+		'pytest', 
+		apppath,
+		'--testdir',
+		testdir
+		], 
+		timeout: 600)
 
-test('container_pytest_pod', 
-	bash_bin,
-	args : [
-		'app/app/scripts/run_tests.sh'
-	], 
-	depends : [container_target],
-	timeout: 600)
+elif packaging_format == 'container'
+	test('container_pytest_pod', 
+		bash_bin,
+		args : [
+			'app/app/scripts/run_tests.sh'
+		], 
+		depends : [container_target],
+		timeout: 600)
+endif
 
 #meson.add_install_script
 #meson.add_dist_script

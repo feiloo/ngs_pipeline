@@ -53,6 +53,11 @@ def sync_couchdb_to_filemaker():
 def sync_sequencer_output():
     poll_sequencer_output()
 
+@mq.task(bind=True, base=AbortableTask)
+def start_workflow_single(self, args):
+    return_code = start_single_workflow(self.is_aborted, args)
+    return return_code
+
 
 @mq.task(bind=True, base=AbortableTask)
 # self because its an abortable task

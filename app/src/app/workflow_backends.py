@@ -258,6 +258,20 @@ def workflow_backend_execute_miniwdl(pipeline_run, is_aborted):
 
     run_workflow_io(cmd, pipeline_run, is_aborted)
 
+def run_ukb_main(samplesheet_path, output_dir, is_aborted):
+    cmd = ['nextflow', 'run', 
+            '/usr/lib/ukb_main_workflow'
+            '-c', '/home/fhoelsch/nextflow_conf_general.config'
+            '--samplesheet', str(samplesheet_path),
+            '--output_dir', str(output_dir
+            ]
+    pipeline_proc = subprocess.run(
+            cmd,
+            capture_output=True
+            )
+    return pipeline_proc.returncode
+
+
 
 def workflow_backend_execute(pipeline_run, is_aborted, backend):
     logger.debug(f'workflow backend starts executing {pipeline_run.id}')
