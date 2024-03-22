@@ -1,3 +1,4 @@
+from typing import Optional
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -39,6 +40,13 @@ class ConfigParams(BaseModel):
     app_secret_key: str
     workflow_output_dir: str
     backend: str = 'clc'
+
+    # local path to clc ImportExport dir
+    clc_import_export_dir: Optional[str]
+    # clc path to clc inputs (clc_serverfile format to inportexport dir)
+    clc_input_dir: Optional[str]
+    # clc path to where clc outputs should be stored (clc object format)
+    clc_output_dir: Optional[str]
 
 
 class Config:
